@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+{% block title %}Tenants — MultiTenant SaaS{% endblock %}
+{% block page_title %}Tenants{% endblock %}
+{% block page_subtitle %}— Provision and manage all tenants{% endblock %}
+
+{% block content %}
+
+<!-- ── Toolbar ────────────────────────────────────────────── -->
+<div class="flex-b mb-5">
+  <div class="search-bar" style="margin:0;flex:1;max-width:400px;">
+    <div class="input-group" style="flex:1;">
+      <span class="input-group-icon">🔍</span>
+      <input type="text" class="form-input" id="searchInput" placeholder="Search by name, slug…">
+    </div>
+  </div>
+  <div class="filter-strip">
+    <select class="form-select" id="filterModel" style="width:160px;">
+      <option value="">All Models</option>
+      <option value="shared_schema">Shared Schema</option>
+      <option value="schema_per_tenant">Schema/Tenant</option>
+      <option value="db_per_tenant">DB/Tenant</option>
+    </select>
+    <select class="form-select" id="filterTier" style="width:130px;">
+      <option value="">All Tiers</option>
+      <option value="free">Free</option>
+      <option value="pro">Pro</option>
+      <option value="enterprise">Enterprise</option>
+    </select>
+    <select class="form-select" id="filterStatus" style="width:130px;">
+      <option value="active">Active</option>
+      <option value="">All Status</option>
+      <option value="deactivated">Deactivated</option>
+    </select>
+    <button class="btn btn-primary" id="newTenantBtn" onclick="openModal('createModal')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Tenant
+    </button>
+  </div>
+</div>
+
+<!-- ── Summary pills ──────────────────────────────────────── -->
+<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;" id="summaryPills">
+  <div class="filter-chip active" onclick="setFilter('',event)">All <strong id="pill-all">—</strong></div>
+  <div class="filter-chip" onclick="setFilter('shared_schema',event)" style="--c:var(--accent)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--accent);"></span>
+    Shared Schema <strong id="pill-shared">—</strong>
+  </div>
+  <div class="filter-chip" onclick="setFilter('schema_per_tenant',event)" style="--c:var(--purple)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--purple);"></span>
+    Schema/Tenant <strong id="pill-schema">—</strong>
+  </div>
+  <div class="filter-chip" onclick="setFilter('db_per_tenant',event)" style="--c:var(--orange)">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--orange);"></span>
+    DB/Tenant <strong id="pill-db">—</strong>
+  </div>
+</div>
+
+<!-- ── Tenants Table ──────────────────────────────────────── -->
+<div class="card">
+  <div class="card-body" style="padding:0;">
+    <div class="table-wrap" style="margin:0;padding:0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Tenant</th>
+            <th>Model</th>
+            <th>Tier</th>
+            <th>Status</th>
+            <th>Schema / DB</th>
+            <th>Max Users</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tenantsBody">
+          <tr><td colspan="8" style="text-align:center;padding:50px;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+              <div class="spinner spinner-lg"></div>
+              <span class="text-muted">Loading tenants…</span>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" style="padding:14px 22px;" id="paginationBar">
+      <span class="text-sm text-muted" id="paginationInfo"></span>
+      <div class="pagination-controls" id="paginationControls"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CREATE TENANT MODAL ──────────────────────────────────── -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🏢 Provision New Tenant</span>
+      <button class="modal-close" onclick="closeModal('createModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="createError" class="login-error"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tenant Name *</label>
+          <input type="text" class="form-input" id="c-name" placeholder="Acme Corporation">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Slug * <span style="color:var(--text-muted);font-weight:400;text-transform:none;">(URL-safe)</span></label>
+          <input type="text" class="form-input" id="c-slug" placeholder="acme-corp">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tier *</label>
+          <select class="form-select" id="c-tier" onchange="updateModelOptions()">
+            <option value="free">Free</option>
+            <option value="pro">Pro</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Isolation Model *</label>
+          <select class="form-select" id="c-model">
+            <option value="shared_schema">Model A — Shared Schema</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;" id="modelInfo">
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;" id="modelInfoText">
+          All tenants share one set of tables. PostgreSQL RLS enforces row-level isolation using <code style="background:var(--border);padding:1px 5px;border-radius:3px;">app.current_tenant</code>. Best for free-tier, high-volume tenants.
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;text-transform:uppercase;letter-spacing:0.04em;">Admin Account</div>
+
+      <div class="form-group">
+        <label class="form-label">Admin Email *</label>
+        <input type="email" class="form-input" id="c-email" placeholder="admin@company.com">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input type="password" class="form-input" id="c-password" placeholder="Min 8 characters">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Metadata (JSON)</label>
+          <input type="text" class="form-input" id="c-meta" placeholder='{"industry":"fintech"}'>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('createModal')">Cancel</button>
+      <button class="btn btn-primary" id="createBtn" onclick="createTenant()">
+        <span id="createBtnText">🚀 Provision Tenant</span>
+        <span id="createSpinner" style="display:none;"><span class="spinner" style="width:14px;height:14px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;"></span></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── DEACTIVATE CONFIRM MODAL ──────────────────────────────── -->
+<div class="modal-overlay" id="deactivateModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <span class="modal-title">⚠️ Deactivate Tenant</span>
+      <button class="modal-close" onclick="closeModal('deactivateModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.7;margin-bottom:14px;">
+        You are about to deactivate <strong style="color:var(--text-primary);" id="deactivateName"></strong>.
+        Data will be preserved for auditing but the tenant will no longer be accessible.
+      </p>
+      <div style="background:var(--danger-soft);border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--danger);">
+        This action removes all API access for this tenant immediately.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('deactivateModal')">Cancel</button>
+      <button class="btn btn-danger" id="confirmDeactivateBtn">Deactivate</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+requireAuth();
+
+let allTenants = [];
+let currentPage = 1;
+const PAGE_SIZE = 15;
+
+// ── Model info descriptions ──────────────────────────────────
+const MODEL_INFO = {
+  shared_schema: 'All tenants share one set of tables. PostgreSQL RLS enforces row-level isolation using <code style="background:var(--border);padding:1px 5px;border-radius:3px;">app.current_tenant</code>. Best for free-tier, high-volume tenants.',
+  schema_per_tenant: 'Each tenant gets their own PostgreSQL schema (e.g., <code style="background:var(--border);padding:1px 5px;border-radius:3px;">tenant_acme.orders</code>). Schema boundary provides namespace isolation. <code>search_path</code> set per connection.',
+  db_per_tenant: 'Each tenant gets a completely separate PostgreSQL database. Maximum isolation — separate WAL, separate buffer cache. Required for enterprise/compliance tenants.'
+};
+
+function updateModelOptions() {
+  const tier  = document.getElementById('c-tier').value;
+  const sel   = document.getElementById('c-model');
+  const allow = { free:['shared_schema'], pro:['shared_schema','schema_per_tenant'], enterprise:['shared_schema','schema_per_tenant','db_per_tenant'] };
+  const names = { shared_schema:'Model A — Shared Schema', schema_per_tenant:'Model B — Schema/Tenant', db_per_tenant:'Model C — Database/Tenant' };
+  sel.innerHTML = (allow[tier]||['shared_schema']).map(m=>`<option value="${m}">${names[m]}</option>`).join('');
+  document.getElementById('modelInfoText').innerHTML = MODEL_INFO[sel.value] || '';
+}
+document.getElementById('c-model').addEventListener('change', e => {
+  document.getElementById('modelInfoText').innerHTML = MODEL_INFO[e.target.value] || '';
+});
+
+// Auto-generate slug from name
+document.getElementById('c-name').addEventListener('input', e => {
+  const slug = e.target.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,48);
+  document.getElementById('c-slug').value = slug;
+});
+
+// ── Load tenants ─────────────────────────────────────────────
+async function loadPageData() {
+  const model  = document.getElementById('filterModel').value;
+  const tier   = document.getElementById('filterTier').value;
+  const status = document.getElementById('filterStatus').value;
+
+  let url = '/tenants?';
+  if (model)  url += `model=${model}&`;
+  if (tier)   url += `tier=${tier}&`;
+  if (status) url += `status=${status}&`;
+
+  const data = await API.get(url);
+  if (!data) return;
+
+  allTenants = data.tenants || [];
+  applySearch();
+  updatePills(data.tenants || []);
+}
+
+function updatePills(tenants) {
+  document.getElementById('pill-all').textContent    = tenants.length;
+  document.getElementById('pill-shared').textContent = tenants.filter(t=>t.model==='shared_schema').length;
+  document.getElementById('pill-schema').textContent = tenants.filter(t=>t.model==='schema_per_tenant').length;
+  document.getElementById('pill-db').textContent     = tenants.filter(t=>t.model==='db_per_tenant').length;
+}
+
+function setFilter(model, e) {
+  document.querySelectorAll('#summaryPills .filter-chip').forEach(c=>c.classList.remove('active'));
+  e.currentTarget.classList.add('active');
+  document.getElementById('filterModel').value = model;
+  loadPageData();
+}
+
+function applySearch() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = q ? allTenants.filter(t => t.name.toLowerCase().includes(q) || t.slug.includes(q)) : allTenants;
+  renderTable(filtered);
+}
+
+function renderTable(tenants) {
+  const total = tenants.length;
+  const start = (currentPage-1)*PAGE_SIZE;
+  const page  = tenants.slice(start, start+PAGE_SIZE);
+
+  document.getElementById('paginationInfo').textContent =
+    `Showing ${start+1}–${Math.min(start+PAGE_SIZE,total)} of ${total} tenants`;
+
+  // Pagination controls
+  const pages = Math.ceil(total/PAGE_SIZE);
+  let pHtml = '';
+  for (let i=1;i<=pages;i++) {
+    pHtml += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  document.getElementById('paginationControls').innerHTML = pHtml;
+
+  if (!page.length) {
+    document.getElementById('tenantsBody').innerHTML =
+      `<tr><td colspan="8">
+        <div class="empty-state">
+          <div class="empty-icon">🏢</div>
+          <div class="empty-title">No tenants found</div>
+          <div class="empty-desc">Try adjusting your filters or provision a new tenant</div>
+        </div>
+      </td></tr>`;
+    return;
+  }
+
+  document.getElementById('tenantsBody').innerHTML = page.map(t => `
+    <tr style="cursor:pointer;" onclick="window.location='/ui/tenants/${t.tenant_id}'">
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:34px;height:34px;border-radius:var(--radius);background:${avatarColor(t.name)};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;">${t.name.charAt(0).toUpperCase()}</div>
+          <div>
+            <div style="font-weight:600;">${t.name}</div>
+            <div class="td-muted">${t.slug}</div>
+          </div>
+        </div>
+      </td>
+      <td>${modelBadge(t.model)}</td>
+      <td>${tierBadge(t.tier)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="status-dot ${t.status}"></div>
+          ${statusBadge(t.status)}
+        </div>
+      </td>
+      <td>
+        ${t.schema_name ? `<span class="td-mono">${t.schema_name}</span>` :
+          t.db_name     ? `<span class="td-mono">${t.db_name}</span>` :
+          '<span class="text-muted">—</span>'}
+      </td>
+      <td style="color:var(--text-secondary);">${t.max_users.toLocaleString()}</td>
+      <td class="td-muted">${fmtDate(t.created_at)}</td>
+      <td onclick="event.stopPropagation()">
+        <div style="display:flex;gap:6px;">
+          <a href="/ui/tenants/${t.tenant_id}" class="btn btn-ghost btn-sm" data-tip="View">👁</a>
+          ${t.status === 'active'
+            ? `<button class="btn btn-danger btn-sm" onclick="confirmDeactivate('${t.tenant_id}','${t.name.replace(/'/g,"\\'")}')">⊗</button>`
+            : '<span class="text-muted text-sm">—</span>'}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function goPage(p) { currentPage = p; applySearch(); }
+
+function avatarColor(name) {
+  const colors = ['#6366f1','#8b5cf6','#ec4899','#f97316','#22c55e','#3b82f6','#f59e0b','#14b8a6'];
+  let h = 0; for (let c of name) h = (h*31 + c.charCodeAt(0)) & 0xffffffff;
+  return colors[Math.abs(h) % colors.length];
+}
+
+// ── Create tenant ────────────────────────────────────────────
+async function createTenant() {
+  const name     = document.getElementById('c-name').value.trim();
+  const slug     = document.getElementById('c-slug').value.trim();
+  const tier     = document.getElementById('c-tier').value;
+  const model    = document.getElementById('c-model').value;
+  const email    = document.getElementById('c-email').value.trim();
+  const password = document.getElementById('c-password').value;
+  const metaRaw  = document.getElementById('c-meta').value.trim();
+
+  if (!name||!slug||!email||!password) {
+    document.getElementById('createError').textContent = 'Name, slug, email and password are required.';
+    document.getElementById('createError').classList.add('show');
+    return;
+  }
+
+  let metadata = {};
+  if (metaRaw) { try { metadata = JSON.parse(metaRaw); } catch { metadata = {}; } }
+
+  document.getElementById('createBtnText').style.display = 'none';
+  document.getElementById('createSpinner').style.display = 'inline';
+  document.getElementById('createBtn').disabled = true;
+  document.getElementById('createError').classList.remove('show');
+
+  const res = await API.post('/tenants', { name, slug, tier, model, admin_email:email, admin_password:password, metadata });
+
+  document.getElementById('createBtnText').style.display = 'inline';
+  document.getElementById('createSpinner').style.display = 'none';
+  document.getElementById('createBtn').disabled = false;
+
+  if (res.ok) {
+    closeModal('createModal');
+    toast(`Tenant "${name}" provisioned successfully`, 'success');
+    loadPageData();
+  } else {
+    document.getElementById('createError').textContent = res.data.error || 'Provisioning failed';
+    document.getElementById('createError').classList.add('show');
+  }
+}
+
+// ── Deactivate ───────────────────────────────────────────────
+function confirmDeactivate(id, name) {
+  document.getElementById('deactivateName').textContent = name;
+  document.getElementById('confirmDeactivateBtn').onclick = async () => {
+    const res = await API.del(`/tenants/${id}`);
+    closeModal('deactivateModal');
+    if (res.ok) { toast(`Tenant deactivated`, 'warning'); loadPageData(); }
+    else toast(res.data.error || 'Failed', 'error');
+  };
+  openModal('deactivateModal');
+}
+
+// ── Event listeners ──────────────────────────────────────────
+document.getElementById('searchInput').addEventListener('input', () => { currentPage=1; applySearch(); });
+document.getElementById('filterModel').addEventListener('change', loadPageData);
+document.getElementById('filterTier').addEventListener('change', loadPageData);
+document.getElementById('filterStatus').addEventListener('change', loadPageData);
+
+// Hide superadmin-only controls for tenant_admin role
+const _role = localStorage.getItem('mt_role') || '';
+if (_role !== 'superadmin') {
+  const btn = document.getElementById('newTenantBtn');
+  if (btn) btn.style.display = 'none';
+}
+
+loadPageData();
+</script>
+{% endblock %}

@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block title %}Audit Logs — MultiTenant SaaS{% endblock %}
+{% block page_title %}Audit Logs{% endblock %}
+{% block page_subtitle %}— Immutable trail of all data mutations{% endblock %}
+
+{% block content %}
+
+<!-- ── Stats strip ────────────────────────────────────────── -->
+<div class="stat-grid mb-5">
+  <div class="stat-card" style="--card-accent:var(--success);--icon-bg:var(--success-soft);--icon-color:var(--success);">
+    <div class="stat-icon">➕</div>
+    <div>
+      <div class="stat-label">Inserts (24h)</div>
+      <div class="stat-value" id="a-inserts">—</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--warning);--icon-bg:var(--warning-soft);--icon-color:var(--warning);">
+    <div class="stat-icon">✏️</div>
+    <div>
+      <div class="stat-label">Updates (24h)</div>
+      <div class="stat-value" id="a-updates">—</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--danger);--icon-bg:var(--danger-soft);--icon-color:var(--danger);">
+    <div class="stat-icon">🗑</div>
+    <div>
+      <div class="stat-label">Deletes (24h)</div>
+      <div class="stat-value" id="a-deletes">—</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--accent);--icon-bg:var(--accent-soft);--icon-color:var(--accent);">
+    <div class="stat-icon">📝</div>
+    <div>
+      <div class="stat-label">Total Events (24h)</div>
+      <div class="stat-value" id="a-total">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Activity mini-chart ────────────────────────────────── -->
+<div class="card mb-5">
+  <div class="card-header mb-4">
+    <span class="card-title">Audit Activity (Last 24h by Operation)</span>
+    <div style="display:flex;gap:10px;font-size:12px;">
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></span>INSERT</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#f59e0b;"></span>UPDATE</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></span>DELETE</span>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="chart-wrap" style="height:160px;">
+      <canvas id="activityChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ── Filter bar ─────────────────────────────────────────── -->
+<div class="card mb-5">
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:12px;align-items:end;flex-wrap:wrap;">
+      <div>
+        <div class="form-label">Tenant ID</div>
+        <input type="text" class="form-input" id="f-tenant" placeholder="UUID or partial…">
+      </div>
+      <div>
+        <div class="form-label">Table</div>
+        <select class="form-select" id="f-table">
+          <option value="">All Tables</option>
+          <option value="orders">orders</option>
+          <option value="products">products</option>
+          <option value="order_items">order_items</option>
+          <option value="invoices">invoices</option>
+        </select>
+      </div>
+      <div>
+        <div class="form-label">Operation</div>
+        <select class="form-select" id="f-op">
+          <option value="">All</option>
+          <option value="INSERT">INSERT</option>
+          <option value="UPDATE">UPDATE</option>
+          <option value="DELETE">DELETE</option>
+        </select>
+      </div>
+      <div>
+        <div class="form-label">Since (ISO date)</div>
+        <input type="datetime-local" class="form-input" id="f-since">
+      </div>
+      <button class="btn btn-primary" onclick="loadLogs(1)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search
+      </button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+      <button class="filter-chip" onclick="quickFilter('INSERT')">Only INSERT</button>
+      <button class="filter-chip" onclick="quickFilter('UPDATE')">Only UPDATE</button>
+      <button class="filter-chip" onclick="quickFilter('DELETE')">Only DELETE</button>
+      <button class="filter-chip" onclick="quickFilter('')">Clear filters</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Log table ──────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-header" style="margin-bottom:0;">
+    <span class="card-title">Audit Entries</span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="text-sm text-muted" id="logCount"></span>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+  </div>
+  <div class="card-body" style="padding:0;">
+    <div class="table-wrap" style="margin:0;padding:0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Log ID</th>
+            <th>Time</th>
+            <th>Tenant</th>
+            <th>User</th>
+            <th>Table / Schema</th>
+            <th>Operation</th>
+            <th>Row ID</th>
+            <th>DB User</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody">
+          <tr><td colspan="9" style="text-align:center;padding:50px;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+              <div class="spinner spinner-lg"></div>
+              <span class="text-muted">Loading audit logs…</span>
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" style="padding:14px 22px;" id="logPagination">
+      <span class="text-sm text-muted" id="logPagInfo"></span>
+      <div class="pagination-controls" id="logPagControls"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── JSON Diff Modal ────────────────────────────────────── -->
+<div class="modal-overlay" id="logDetailModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="logDetailTitle">Audit Entry</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="logDetailSub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('logDetailModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Meta row -->
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px;padding:14px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);" id="logMeta"></div>
+
+      <!-- Diff -->
+      <div class="grid-2" id="logDiff">
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--danger);margin-bottom:6px;">Before (old_value)</div>
+          <pre class="code-block" id="logOld" style="max-height:320px;overflow-y:auto;"></pre>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--success);margin-bottom:6px;">After (new_value)</div>
+          <pre class="code-block" id="logNew" style="max-height:320px;overflow-y:auto;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+requireAuth();
+
+const PAGE_SIZE = 25;
+let currentPage = 1;
+let allLogs     = [];
+
+function quickFilter(op) {
+  document.getElementById('f-op').value     = op;
+  document.getElementById('f-tenant').value = '';
+  document.getElementById('f-table').value  = '';
+  document.getElementById('f-since').value  = '';
+  loadLogs(1);
+}
+
+async function loadLogs(page) {
+  currentPage = page || 1;
+  const tenant = document.getElementById('f-tenant').value.trim();
+  const table  = document.getElementById('f-table').value;
+  const op     = document.getElementById('f-op').value;
+  const since  = document.getElementById('f-since').value;
+
+  let url = `/admin/audit-logs?limit=200`;
+  if (tenant) url += `&tenant_id=${encodeURIComponent(tenant)}`;
+  if (table)  url += `&table=${table}`;
+  if (op)     url += `&operation=${op}`;
+  if (since)  url += `&since=${encodeURIComponent(since)}`;
+
+  document.getElementById('logsBody').innerHTML =
+    `<tr><td colspan="9" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr>`;
+
+  const data = await API.get(url);
+  allLogs    = (data||{}).logs || [];
+
+  // Stats
+  const ins = allLogs.filter(l=>l.operation==='INSERT').length;
+  const upd = allLogs.filter(l=>l.operation==='UPDATE').length;
+  const del = allLogs.filter(l=>l.operation==='DELETE').length;
+  document.getElementById('a-inserts').textContent = ins;
+  document.getElementById('a-updates').textContent = upd;
+  document.getElementById('a-deletes').textContent = del;
+  document.getElementById('a-total').textContent   = allLogs.length;
+
+  renderLogs();
+  buildActivityChart(allLogs);
+}
+
+function renderLogs() {
+  const total = allLogs.length;
+  const start = (currentPage-1)*PAGE_SIZE;
+  const page  = allLogs.slice(start, start+PAGE_SIZE);
+
+  document.getElementById('logCount').textContent   = total.toLocaleString() + ' entries';
+  document.getElementById('logPagInfo').textContent = `Showing ${start+1}–${Math.min(start+PAGE_SIZE,total)} of ${total}`;
+
+  const pages = Math.ceil(total/PAGE_SIZE);
+  let pHtml = '';
+  if (currentPage > 1)   pHtml += `<button class="page-btn" onclick="goPage(${currentPage-1})">‹</button>`;
+  for (let i=Math.max(1,currentPage-2); i<=Math.min(pages,currentPage+2); i++) {
+    pHtml += `<button class="page-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (currentPage < pages) pHtml += `<button class="page-btn" onclick="goPage(${currentPage+1})">›</button>`;
+  document.getElementById('logPagControls').innerHTML = pHtml;
+
+  if (!page.length) {
+    document.getElementById('logsBody').innerHTML =
+      `<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📝</div><div class="empty-title">No audit entries match your filters</div></div></td></tr>`;
+    return;
+  }
+
+  document.getElementById('logsBody').innerHTML = page.map(l => `
+    <tr style="cursor:pointer;" onclick="showDetail(${l.log_id})">
+      <td class="td-mono">#${l.log_id}</td>
+      <td class="td-muted" style="white-space:nowrap;">${fmtDateTime(l.created_at)}</td>
+      <td>${l.tenant_id ? `<span class="td-mono" title="${l.tenant_id}">${l.tenant_id.slice(0,8)}…</span>` : '—'}</td>
+      <td>${l.user_id   ? `<span class="td-mono" title="${l.user_id}">${l.user_id.slice(0,8)}…</span>`   : '<span class="text-muted">system</span>'}</td>
+      <td>
+        <span style="font-family:var(--font-mono);font-size:12px;color:var(--accent);">${l.table_name}</span>
+        ${l.schema !== 'public' ? `<span class="td-muted"> · ${l.schema}</span>` : ''}
+      </td>
+      <td>${opBadge(l.operation)}</td>
+      <td class="td-mono">${l.row_id ? l.row_id.slice(0,10)+'…' : '—'}</td>
+      <td class="td-muted">${l.db_user||'—'}</td>
+      <td>
+        <span style="font-size:11px;color:var(--text-muted);">
+          ${l.old_value||l.new_value ? '📄 View diff' : '—'}
+        </span>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function goPage(p) { currentPage = p; renderLogs(); }
+
+function showDetail(id) {
+  const log = allLogs.find(l=>l.log_id===id);
+  if (!log) return;
+
+  document.getElementById('logDetailTitle').textContent = `${log.operation} · ${log.table_name}`;
+  document.getElementById('logDetailSub').textContent   = `Log #${log.log_id} · ${fmtDateTime(log.created_at)}`;
+
+  document.getElementById('logMeta').innerHTML = [
+    ['Operation', `<span class="badge badge-${log.operation==='INSERT'?'success':log.operation==='UPDATE'?'warning':'danger'}">${log.operation}</span>`],
+    ['Table', `<span style="font-family:var(--font-mono);font-size:12px;color:var(--accent);">${log.table_name}</span>`],
+    ['Schema', `<span class="td-mono">${log.schema||'public'}</span>`],
+    ['Tenant ID', log.tenant_id ? `<span class="td-mono">${log.tenant_id}</span>` : '—'],
+    ['User ID', log.user_id ? `<span class="td-mono">${log.user_id}</span>` : 'system'],
+    ['Row ID', log.row_id ? `<span class="td-mono">${log.row_id}</span>` : '—'],
+    ['DB User', `<span class="td-mono">${log.db_user||'—'}</span>`],
+  ].map(([k,v])=>`
+    <div style="min-width:130px;">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:3px;">${k}</div>
+      <div style="font-size:12.5px;">${v}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('logOld').textContent = log.old_value ? JSON.stringify(log.old_value, null, 2) : '— null (INSERT)';
+  document.getElementById('logNew').textContent = log.new_value ? JSON.stringify(log.new_value, null, 2) : '— null (DELETE)';
+
+  openModal('logDetailModal');
+}
+
+function buildActivityChart(logs) {
+  // Group by hour (last 24) × operation
+  const now   = new Date();
+  const hours = [];
+  for (let i=23;i>=0;i--) {
+    const h = new Date(now); h.setHours(h.getHours()-i, 0, 0, 0);
+    hours.push(h.toLocaleTimeString('en-US',{hour:'2-digit',hour12:false})+':00');
+  }
+  const opData = { INSERT:new Array(24).fill(0), UPDATE:new Array(24).fill(0), DELETE:new Array(24).fill(0) };
+  logs.forEach(l => {
+    const d = new Date(l.created_at);
+    const diff = Math.floor((now - d) / 3600000);
+    if (diff < 24) {
+      const idx = 23 - diff;
+      if (opData[l.operation] !== undefined) opData[l.operation][idx]++;
+    }
+  });
+
+  const canvas = document.getElementById('activityChart');
+  if (canvas._chartInst) canvas._chartInst.destroy();
+  const ctx = canvas.getContext('2d');
+  canvas._chartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: hours,
+      datasets: [
+        { label:'INSERT', data:opData.INSERT, backgroundColor:'rgba(34,197,94,0.7)',  borderRadius:3, stack:'s' },
+        { label:'UPDATE', data:opData.UPDATE, backgroundColor:'rgba(245,158,11,0.7)', borderRadius:3, stack:'s' },
+        { label:'DELETE', data:opData.DELETE, backgroundColor:'rgba(239,68,68,0.7)',  borderRadius:3, stack:'s' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa', mode:'index', intersect:false } },
+      scales: {
+        x: { stacked:true, grid:{display:false}, ticks:{ color:'#8b8baa', font:{size:10}, maxTicksLimit:8 } },
+        y: { stacked:true, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{ color:'#8b8baa', font:{size:11}, stepSize:1 } }
+      }
+    }
+  });
+}
+
+function exportCSV() {
+  if (!allLogs.length) { toast('No logs to export','warning'); return; }
+  const headers = ['log_id','created_at','tenant_id','user_id','table_name','schema','operation','row_id','db_user'];
+  const rows    = allLogs.map(l => headers.map(h => JSON.stringify(l[h]??'')).join(','));
+  const csv     = [headers.join(','), ...rows].join('\n');
+  const blob    = new Blob([csv], { type:'text/csv' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href = url; a.download = `audit_logs_${Date.now()}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('CSV exported', 'success');
+}
+
+// Default: show last 24h
+document.getElementById('f-since').value = new Date(Date.now()-86400000).toISOString().slice(0,16);
+loadLogs(1);
+</script>
+{% endblock %}

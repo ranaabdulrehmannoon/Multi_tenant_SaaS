@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+{% block title %}Tenant Detail — MultiTenant SaaS{% endblock %}
+{% block page_title %}<span id="hdr-name">Loading…</span>{% endblock %}
+{% block page_subtitle %}— <span id="hdr-slug"></span>{% endblock %}
+
+{% block content %}
+
+<!-- ── Tenant header card ──────────────────────────────────── -->
+<div class="card mb-6" id="tenantHeaderCard">
+  <div class="card-body">
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+      <div id="tenant-avatar" style="width:60px;height:60px;border-radius:var(--radius-lg);background:var(--accent-soft);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:var(--accent);flex-shrink:0;">?</div>
+      <div style="flex:1;min-width:200px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          <span style="font-size:20px;font-weight:800;" id="t-name">—</span>
+          <span id="t-model-badge"></span>
+          <span id="t-tier-badge"></span>
+          <span id="t-status-badge"></span>
+        </div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;">
+          <div style="font-size:12.5px;color:var(--text-secondary);">
+            <span style="color:var(--text-muted);">Slug: </span>
+            <span class="td-mono" id="t-slug">—</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--text-secondary);">
+            <span style="color:var(--text-muted);">ID: </span>
+            <span class="td-mono" id="t-id">—</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--text-secondary);">
+            <span style="color:var(--text-muted);">Created: </span>
+            <span id="t-created">—</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;" id="headerActions">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('addUserModal')">
+          + Add User
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('insertDataModal')">
+          + Insert Data
+        </button>
+        <button class="btn btn-danger btn-sm" id="deactivateBtn">
+          Deactivate
+        </button>
+      </div>
+    </div>
+
+    <!-- Resource usage bars -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;padding-top:18px;border-top:1px solid var(--border);" id="resourceBars">
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:12px;color:var(--text-secondary);">User capacity</span>
+          <span style="font-size:12px;font-weight:600;" id="users-usage">—</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="users-bar" style="width:0%;"></div></div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:12px;color:var(--text-secondary);">Storage</span>
+          <span style="font-size:12px;font-weight:600;" id="storage-usage">—</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="storage-bar" style="width:0%;background:var(--success);"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tabs ───────────────────────────────────────────────── -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview',this)">📊 Overview</div>
+  <div class="tab" onclick="switchTab('orders',this)">📦 Orders</div>
+  <div class="tab" onclick="switchTab('products',this)">🛍 Products</div>
+  <div class="tab" onclick="switchTab('users',this)">👥 Users</div>
+  <div class="tab" onclick="switchTab('audit',this)">📝 Audit Log</div>
+</div>
+
+<!-- ── OVERVIEW TAB ───────────────────────────────────────── -->
+<div class="tab-panel active" id="panel-overview">
+  <div class="grid-2 mb-5">
+    <div class="card">
+      <div class="card-header mb-4"><span class="card-title">Order Volume</span></div>
+      <div class="card-body"><div class="chart-wrap" style="height:200px;"><canvas id="orderChart"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header mb-4"><span class="card-title">Order Status Breakdown</span></div>
+      <div class="card-body"><div class="chart-wrap" style="height:200px;"><canvas id="statusChart"></canvas></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header mb-4"><span class="card-title">Tenant Metadata</span></div>
+    <div class="card-body"><pre class="code-block" id="metadataBlock">{}</pre></div>
+  </div>
+</div>
+
+<!-- ── ORDERS TAB ─────────────────────────────────────────── -->
+<div class="tab-panel" id="panel-orders">
+  <div class="flex-b mb-4">
+    <div class="input-group" style="max-width:300px;">
+      <span class="input-group-icon">🔍</span>
+      <input type="text" class="form-input" id="orderSearch" placeholder="Search orders…" oninput="filterOrders()">
+    </div>
+    <select class="form-select" style="width:160px;" id="orderStatusFilter" onchange="loadOrders()">
+      <option value="">All Statuses</option>
+      <option value="pending">Pending</option>
+      <option value="confirmed">Confirmed</option>
+      <option value="shipped">Shipped</option>
+      <option value="delivered">Delivered</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:0;">
+      <table><thead><tr>
+        <th>Order ID</th><th>Status</th><th>Amount</th><th>Currency</th><th>Created</th>
+      </tr></thead>
+      <tbody id="ordersBody"><tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── PRODUCTS TAB ───────────────────────────────────────── -->
+<div class="tab-panel" id="panel-products">
+  <div class="card">
+    <div class="card-body" style="padding:0;">
+      <table><thead><tr>
+        <th>Name</th><th>SKU</th><th>Price</th><th>Status</th><th>Created</th>
+      </tr></thead>
+      <tbody id="productsBody"><tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── USERS TAB ──────────────────────────────────────────── -->
+<div class="tab-panel" id="panel-users">
+  <div class="card">
+    <div class="card-header mb-4">
+      <span class="card-title">Users</span>
+      <button class="btn btn-primary btn-sm" onclick="openModal('addUserModal')">+ Add User</button>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+      <table><thead><tr>
+        <th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th>
+      </tr></thead>
+      <tbody id="usersBody"><tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── AUDIT TAB ──────────────────────────────────────────── -->
+<div class="tab-panel" id="panel-audit">
+  <div class="flex-b mb-4">
+    <div class="filter-strip">
+      <select class="form-select" style="width:140px;" id="auditOpFilter" onchange="loadAudit()">
+        <option value="">All Operations</option>
+        <option value="INSERT">INSERT</option>
+        <option value="UPDATE">UPDATE</option>
+        <option value="DELETE">DELETE</option>
+      </select>
+      <select class="form-select" style="width:150px;" id="auditTableFilter" onchange="loadAudit()">
+        <option value="">All Tables</option>
+        <option value="orders">orders</option>
+        <option value="products">products</option>
+        <option value="order_items">order_items</option>
+        <option value="invoices">invoices</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding:0;">
+      <table><thead><tr>
+        <th>Time</th><th>Table</th><th>Operation</th><th>Row ID</th><th>Details</th>
+      </tr></thead>
+      <tbody id="tenantAuditBody"><tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD USER MODAL ─────────────────────────────────────── -->
+<div class="modal-overlay" id="addUserModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <span class="modal-title">👤 Add User</span>
+      <button class="modal-close" onclick="closeModal('addUserModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="addUserError" class="login-error"></div>
+      <div class="form-group">
+        <label class="form-label">Email *</label>
+        <input type="email" class="form-input" id="u-email" placeholder="user@company.com">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input type="password" class="form-input" id="u-password" placeholder="Min 8 chars">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-select" id="u-role">
+            <option value="tenant_user">Tenant User</option>
+            <option value="tenant_admin">Tenant Admin</option>
+            <option value="tenant_readonly">Readonly</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addUserModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── INSERT DATA MODAL ──────────────────────────────────── -->
+<div class="modal-overlay" id="insertDataModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <span class="modal-title">➕ Insert Data</span>
+      <button class="modal-close" onclick="closeModal('insertDataModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="insertDataError" class="login-error"></div>
+      <div class="form-group">
+        <label class="form-label">Table</label>
+        <select class="form-select" id="ins-table" onchange="toggleInsertFields()">
+          <option value="products">Products</option>
+          <option value="orders">Orders</option>
+        </select>
+      </div>
+      <div id="ins-product-fields">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Name *</label><input type="text" class="form-input" id="ins-p-name" placeholder="Product Name"></div>
+          <div class="form-group"><label class="form-label">SKU *</label><input type="text" class="form-input" id="ins-p-sku" placeholder="SKU-001"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Price</label><input type="number" class="form-input" id="ins-p-price" value="9.99" step="0.01"></div>
+      </div>
+      <div id="ins-order-fields" style="display:none;">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Total Amount</label><input type="number" class="form-input" id="ins-o-amount" value="99.99" step="0.01"></div>
+          <div class="form-group"><label class="form-label">Currency</label><input type="text" class="form-input" id="ins-o-currency" value="USD" maxlength="3"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('insertDataModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="insertData()">Insert</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── JSON DIFF MODAL ────────────────────────────────────── -->
+<div class="modal-overlay" id="diffModal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="diffModalTitle">Audit Detail</span>
+      <button class="modal-close" onclick="closeModal('diffModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px;">Before</div>
+          <pre class="code-block" id="diffOld" style="max-height:300px;"></pre>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px;">After</div>
+          <pre class="code-block" id="diffNew" style="max-height:300px;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+requireAuth();
+
+const TENANT_ID = window.location.pathname.split('/').pop();
+let tenantData = null;
+let ordersData = [], productsData = [];
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+  if (name==='orders')   loadOrders();
+  if (name==='products') loadProducts();
+  if (name==='users')    loadUsers();
+  if (name==='audit')    loadAudit();
+}
+
+function toggleInsertFields() {
+  const t = document.getElementById('ins-table').value;
+  document.getElementById('ins-product-fields').style.display = t==='products' ? '' : 'none';
+  document.getElementById('ins-order-fields').style.display   = t==='orders'   ? '' : 'none';
+}
+
+// ── Load tenant info ─────────────────────────────────────────
+async function loadPageData() {
+  const t = await API.get(`/tenants/${TENANT_ID}`);
+  if (!t) return;
+  tenantData = t;
+
+  document.getElementById('hdr-name').textContent    = t.name;
+  document.getElementById('hdr-slug').textContent    = t.slug;
+  document.getElementById('t-name').textContent      = t.name;
+  document.getElementById('t-slug').textContent      = t.slug;
+  document.getElementById('t-id').textContent        = t.tenant_id.slice(0,8)+'…';
+  document.getElementById('t-created').textContent   = fmtDate(t.created_at);
+  document.getElementById('t-model-badge').innerHTML = modelBadge(t.model);
+  document.getElementById('t-tier-badge').innerHTML  = tierBadge(t.tier);
+  document.getElementById('t-status-badge').innerHTML= statusBadge(t.status);
+
+  const colors = ['#6366f1','#8b5cf6','#ec4899','#f97316','#22c55e','#3b82f6','#f59e0b','#14b8a6'];
+  let h=0; for(let c of t.name) h=(h*31+c.charCodeAt(0))&0xffffffff;
+  const col = colors[Math.abs(h)%colors.length];
+  document.getElementById('tenant-avatar').textContent = t.name.charAt(0).toUpperCase();
+  document.getElementById('tenant-avatar').style.background = col+'22';
+  document.getElementById('tenant-avatar').style.color = col;
+
+  document.getElementById('users-usage').textContent = `${0} / ${t.max_users}`;
+  document.getElementById('storage-usage').textContent = `0 MB / ${t.max_storage_gb} GB`;
+
+  document.getElementById('metadataBlock').textContent = JSON.stringify(t.metadata||{}, null, 2);
+
+  if (t.status !== 'active') {
+    document.getElementById('deactivateBtn').disabled = true;
+    document.getElementById('deactivateBtn').textContent = 'Deactivated';
+  }
+  document.getElementById('deactivateBtn').onclick = async () => {
+    if (!confirm(`Deactivate "${t.name}"?`)) return;
+    const res = await API.del(`/tenants/${TENANT_ID}`);
+    if (res.ok) { toast('Tenant deactivated','warning'); loadPageData(); }
+    else toast(res.data.error||'Failed','error');
+  };
+
+  // Load overview charts
+  loadOrders(true);
+}
+
+// ── Orders ───────────────────────────────────────────────────
+async function loadOrders(forOverview=false) {
+  const data = await API.get(`/tenants/${TENANT_ID}/data?table=orders&limit=200`);
+  const rows  = (data||{}).data || [];
+  ordersData  = rows;
+
+  if (forOverview) buildOrderCharts(rows);
+
+  // Table rendering
+  const filtered = rows.filter(r => {
+    const sf = document.getElementById('orderStatusFilter').value;
+    return !sf || r.status === sf;
+  });
+  renderOrdersTable(filtered);
+}
+
+function filterOrders() {
+  const q = document.getElementById('orderSearch').value.toLowerCase();
+  const sf = document.getElementById('orderStatusFilter').value;
+  const filtered = ordersData.filter(r => (!sf||r.status===sf) && (!q||r.order_id.includes(q)));
+  renderOrdersTable(filtered);
+}
+
+function renderOrdersTable(rows) {
+  document.getElementById('ordersBody').innerHTML = rows.length
+    ? rows.slice(0,50).map(r=>`
+      <tr>
+        <td class="td-mono">${r.order_id.slice(0,8)}…</td>
+        <td>${badge(r.status, {pending:'warning',confirmed:'info',shipped:'purple',delivered:'success',cancelled:'danger',refunded:'neutral'}[r.status]||'neutral')}</td>
+        <td style="font-weight:600;">$${parseFloat(r.total_amount||0).toFixed(2)}</td>
+        <td class="td-muted">${r.currency||'USD'}</td>
+        <td class="td-muted">${fmtDateTime(r.created_at)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No orders</div></div></td></tr>`;
+}
+
+function buildOrderCharts(rows) {
+  // Status chart
+  const statusCount = {};
+  rows.forEach(r=>{ statusCount[r.status]=(statusCount[r.status]||0)+1; });
+  const sLabels = Object.keys(statusCount);
+  const sColors = sLabels.map(s=>({pending:'#f59e0b',confirmed:'#3b82f6',shipped:'#a855f7',delivered:'#22c55e',cancelled:'#ef4444',refunded:'#64748b'}[s]||'#6366f1'));
+
+  const ctx2 = document.getElementById('statusChart').getContext('2d');
+  new Chart(ctx2, {
+    type:'doughnut',
+    data:{ labels: sLabels.map(s=>s.charAt(0).toUpperCase()+s.slice(1)), datasets:[{ data:Object.values(statusCount), backgroundColor:sColors, borderWidth:2, borderColor:'#13131f', hoverOffset:6 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'right', labels:{ color:'#8b8baa', font:{size:11}, boxWidth:10 } }, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa' } }, cutout:'60%' }
+  });
+
+  // Volume by day (last 7 days)
+  const dayCounts = {};
+  const now = new Date();
+  for (let i=6;i>=0;i--) {
+    const d = new Date(now); d.setDate(d.getDate()-i);
+    dayCounts[d.toLocaleDateString('en-US',{month:'short',day:'numeric'})] = 0;
+  }
+  rows.forEach(r => {
+    const k = new Date(r.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    if (k in dayCounts) dayCounts[k]++;
+  });
+
+  const ctx1 = document.getElementById('orderChart').getContext('2d');
+  new Chart(ctx1, {
+    type:'line',
+    data:{ labels: Object.keys(dayCounts), datasets:[{ data:Object.values(dayCounts), borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,0.1)', borderWidth:2, pointBackgroundColor:'#6366f1', pointRadius:4, fill:true, tension:0.4 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa' } }, scales:{ x:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11},stepSize:1} } } }
+  });
+}
+
+// ── Products ─────────────────────────────────────────────────
+async function loadProducts() {
+  const data = await API.get(`/tenants/${TENANT_ID}/data?table=products&limit=100`);
+  const rows  = (data||{}).data || [];
+  document.getElementById('productsBody').innerHTML = rows.length
+    ? rows.map(r=>`
+      <tr>
+        <td style="font-weight:600;">${r.name}</td>
+        <td class="td-mono">${r.sku||'—'}</td>
+        <td style="font-weight:600;color:var(--success);">$${parseFloat(r.price||0).toFixed(2)}</td>
+        <td>${r.is_active ? badge('Active','success') : badge('Inactive','neutral')}</td>
+        <td class="td-muted">${fmtDate(r.created_at)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🛍</div><div class="empty-title">No products</div></div></td></tr>`;
+}
+
+// ── Users ─────────────────────────────────────────────────────
+async function loadUsers() {
+  // We don't have a direct "list users" endpoint; using a workaround via admin
+  document.getElementById('usersBody').innerHTML =
+    `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">
+      User listing requires a dedicated GET /tenants/&lt;id&gt;/users endpoint.<br>
+      Shown in the provisioner tests — users are in public.tenant_users.
+    </td></tr>`;
+}
+
+// ── Audit ─────────────────────────────────────────────────────
+async function loadAudit() {
+  const op    = document.getElementById('auditOpFilter').value;
+  const table = document.getElementById('auditTableFilter').value;
+  let url = `/admin/audit-logs?tenant_id=${TENANT_ID}&limit=50`;
+  if (op)    url += `&operation=${op}`;
+  if (table) url += `&table=${table}`;
+
+  const data = await API.get(url);
+  const logs  = (data||{}).logs || [];
+  document.getElementById('tenantAuditBody').innerHTML = logs.length
+    ? logs.map(l=>`
+      <tr style="cursor:pointer;" onclick="showDiff(${JSON.stringify(l).replace(/"/g,'&quot;')})">
+        <td class="td-muted">${fmtDateTime(l.created_at)}</td>
+        <td><span style="font-family:var(--font-mono);font-size:12px;">${l.table_name}</span></td>
+        <td>${opBadge(l.operation)}</td>
+        <td class="td-mono">${l.row_id ? l.row_id.slice(0,12)+'…' : '—'}</td>
+        <td><span style="font-size:11px;color:var(--text-muted);">Click to expand</span></td>
+      </tr>`).join('')
+    : `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📝</div><div class="empty-title">No audit entries</div></div></td></tr>`;
+}
+
+function showDiff(log) {
+  document.getElementById('diffModalTitle').textContent = `${log.operation} on ${log.table_name} — ${fmtDateTime(log.created_at)}`;
+  document.getElementById('diffOld').textContent = log.old_value ? JSON.stringify(log.old_value, null, 2) : 'null (INSERT)';
+  document.getElementById('diffNew').textContent = log.new_value ? JSON.stringify(log.new_value, null, 2) : 'null (DELETE)';
+  openModal('diffModal');
+}
+
+// ── Add User ─────────────────────────────────────────────────
+async function addUser() {
+  const email    = document.getElementById('u-email').value.trim();
+  const password = document.getElementById('u-password').value;
+  const role     = document.getElementById('u-role').value;
+  if (!email||!password) { document.getElementById('addUserError').textContent='Email and password required.'; document.getElementById('addUserError').classList.add('show'); return; }
+  const res = await API.post(`/tenants/${TENANT_ID}/users`, { email, password, role });
+  if (res.ok) { closeModal('addUserModal'); toast('User created','success'); }
+  else { document.getElementById('addUserError').textContent=res.data.error||'Failed'; document.getElementById('addUserError').classList.add('show'); }
+}
+
+// ── Insert Data ───────────────────────────────────────────────
+async function insertData() {
+  const table = document.getElementById('ins-table').value;
+  let data = {};
+  if (table==='products') {
+    data = { name: document.getElementById('ins-p-name').value, sku: document.getElementById('ins-p-sku').value, price: parseFloat(document.getElementById('ins-p-price').value) };
+  } else {
+    data = { total_amount: parseFloat(document.getElementById('ins-o-amount').value), currency: document.getElementById('ins-o-currency').value };
+  }
+  const res = await API.post(`/tenants/${TENANT_ID}/data`, { table, data });
+  if (res.ok) { closeModal('insertDataModal'); toast(`${table.slice(0,-1)} inserted`,'success'); if(table==='orders') loadOrders(); else loadProducts(); }
+  else { document.getElementById('insertDataError').textContent=res.data.error||'Failed'; document.getElementById('insertDataError').classList.add('show'); }
+}
+
+loadPageData();
+</script>
+{% endblock %}

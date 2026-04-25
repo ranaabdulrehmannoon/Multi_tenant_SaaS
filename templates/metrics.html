@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+{% block title %}Metrics — MultiTenant SaaS{% endblock %}
+{% block page_title %}Metrics{% endblock %}
+{% block page_subtitle %}— Cross-tenant analytics &amp; performance{% endblock %}
+
+{% block content %}
+
+<!-- ── KPI row ────────────────────────────────────────────── -->
+<div class="stat-grid mb-6">
+  <div class="stat-card" style="--card-accent:var(--accent);--icon-bg:var(--accent-soft);--icon-color:var(--accent);">
+    <div class="stat-icon">💰</div>
+    <div>
+      <div class="stat-label">Total Revenue (Model A)</div>
+      <div class="stat-value" id="m-revenue">—</div>
+      <div class="stat-delta neutral">Shared schema tenants</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--success);--icon-bg:var(--success-soft);--icon-color:var(--success);">
+    <div class="stat-icon">📦</div>
+    <div>
+      <div class="stat-label">Total Orders</div>
+      <div class="stat-value" id="m-orders">—</div>
+      <div class="stat-delta neutral">All tenants</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--warning);--icon-bg:var(--warning-soft);--icon-color:var(--warning);">
+    <div class="stat-icon">📝</div>
+    <div>
+      <div class="stat-label">Audit Ops (24h)</div>
+      <div class="stat-value" id="m-audit">—</div>
+      <div class="stat-delta neutral">Across all tables</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--info);--icon-bg:var(--info-soft);--icon-color:var(--info);">
+    <div class="stat-icon">🏢</div>
+    <div>
+      <div class="stat-label">Active Tenants</div>
+      <div class="stat-value" id="m-tenants">—</div>
+      <div class="stat-delta neutral">Across 3 models</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Revenue & Model comparison ─────────────────────────── -->
+<div class="grid-2 mb-6">
+  <div class="card">
+    <div class="card-header mb-4">
+      <span class="card-title">Revenue by Tenant (Top 10)</span>
+      <span class="badge badge-accent">Model A</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:280px;">
+        <canvas id="revenueBarChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header mb-4">
+      <span class="card-title">Order Volume by Tenant</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:280px;">
+        <canvas id="orderVolumeChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Model + Tier side by side ──────────────────────────── -->
+<div class="grid-3 mb-6">
+  <div class="card">
+    <div class="card-header mb-4"><span class="card-title">Tenant Model Distribution</span></div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:200px;">
+        <canvas id="modelPieChart"></canvas>
+      </div>
+      <div id="modelPieLegend" style="display:flex;flex-direction:column;gap:6px;margin-top:14px;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header mb-4"><span class="card-title">Tier Distribution</span></div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:200px;">
+        <canvas id="tierPieChart"></canvas>
+      </div>
+      <div id="tierPieLegend" style="display:flex;flex-direction:column;gap:6px;margin-top:14px;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header mb-4"><span class="card-title">Audit Activity (24h)</span></div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:200px;">
+        <canvas id="auditPieChart"></canvas>
+      </div>
+      <div id="auditPieLegend" style="display:flex;flex-direction:column;gap:6px;margin-top:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Tenant performance table ───────────────────────────── -->
+<div class="card mb-6">
+  <div class="card-header" style="margin-bottom:0;">
+    <span class="card-title">Tenant Performance Leaderboard</span>
+    <div class="filter-strip">
+      <select class="form-select" id="sortBy" style="width:160px;" onchange="renderLeaderboard()">
+        <option value="revenue">Sort by Revenue</option>
+        <option value="orders">Sort by Orders</option>
+      </select>
+    </div>
+  </div>
+  <div class="card-body" style="padding-top:16px;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tenant</th>
+            <th>Model</th>
+            <th>Tier</th>
+            <th>Total Orders</th>
+            <th>Revenue</th>
+            <th>Revenue Bar</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody">
+          <tr><td colspan="7" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── Audit breakdown by table ───────────────────────────── -->
+<div class="card">
+  <div class="card-header mb-4">
+    <span class="card-title">Audit Operations by Table (Last 24h)</span>
+  </div>
+  <div class="card-body">
+    <div class="chart-wrap" style="height:220px;">
+      <canvas id="auditTableChart"></canvas>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+requireAuth();
+
+let metricsData = null;
+let revenueData = [];
+
+function makeDoughnut(id, labels, data, colors, legendId) {
+  const ctx = document.getElementById(id).getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: colors, borderColor: colors.map(c=>c+'60'), borderWidth:2, hoverOffset:8 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa', padding:10 }
+      }
+    }
+  });
+  if (legendId) {
+    const total = data.reduce((s,v)=>s+v,0)||1;
+    document.getElementById(legendId).innerHTML = labels.map((l,i)=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:12.5px;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div style="width:9px;height:9px;border-radius:50%;background:${colors[i]};flex-shrink:0;"></div>
+          <span style="color:var(--text-secondary);">${l}</span>
+        </div>
+        <span style="font-weight:700;color:var(--text-primary);">${data[i]} <span style="color:var(--text-muted);font-weight:400;">(${Math.round(data[i]/total*100)}%)</span></span>
+      </div>`).join('');
+  }
+  return chart;
+}
+
+let leaderboardRaw = [];
+
+function renderLeaderboard() {
+  const sort = document.getElementById('sortBy').value;
+  const sorted = [...leaderboardRaw].sort((a,b) => sort==='revenue' ? b.total_revenue-a.total_revenue : b.total_orders-a.total_orders);
+  const maxRev = Math.max(...sorted.map(r=>r.total_revenue), 1);
+
+  document.getElementById('leaderboardBody').innerHTML = sorted.length
+    ? sorted.map((r,i)=>`
+        <tr style="cursor:pointer;" onclick="window.location='/ui/tenants/${r.tenant_id||''}'">
+          <td style="color:var(--text-muted);font-weight:700;">${i+1}</td>
+          <td>
+            <div style="font-weight:600;">${r.name}</div>
+            <div class="td-muted">${r.slug}</div>
+          </td>
+          <td>${r.model ? modelBadge(r.model) : '—'}</td>
+          <td>${r.tier ? tierBadge(r.tier) : '—'}</td>
+          <td style="font-weight:600;">${r.total_orders.toLocaleString()}</td>
+          <td style="font-weight:700;color:var(--success);">$${r.total_revenue.toLocaleString('en',{minimumFractionDigits:2})}</td>
+          <td style="min-width:120px;">
+            <div class="progress-bar">
+              <div class="progress-fill" style="width:${(r.total_revenue/maxRev*100).toFixed(1)}%;"></div>
+            </div>
+          </td>
+        </tr>`).join('')
+    : `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📊</div><div class="empty-title">No data</div></div></td></tr>`;
+}
+
+async function loadPageData() {
+  const data = await API.get('/admin/metrics');
+  if (!data) return;
+  metricsData = data;
+
+  const breakdown = data.tenant_breakdown || [];
+  const revenue   = data.top_tenants_by_revenue || [];
+  const auditOps  = data.audit_ops_last_24h || [];
+
+  // KPIs
+  const totalRev    = revenue.reduce((s,r)=>s+r.total_revenue,0);
+  const totalOrders = revenue.reduce((s,r)=>s+r.total_orders,0);
+  const totalAudit  = auditOps.reduce((s,r)=>s+r.count,0);
+  const totalActive = breakdown.filter(r=>r.status==='active').reduce((s,r)=>s+r.count,0);
+
+  document.getElementById('m-revenue').textContent = '$'+totalRev.toLocaleString('en',{minimumFractionDigits:0,maximumFractionDigits:0});
+  document.getElementById('m-orders').textContent  = totalOrders.toLocaleString();
+  document.getElementById('m-audit').textContent   = totalAudit.toLocaleString();
+  document.getElementById('m-tenants').textContent = totalActive;
+
+  // Revenue bar chart
+  const top10 = revenue.slice(0,10);
+  const rCtx  = document.getElementById('revenueBarChart').getContext('2d');
+  new Chart(rCtx, {
+    type:'bar',
+    data:{ labels:top10.map(r=>r.name.slice(0,12)), datasets:[{ data:top10.map(r=>r.total_revenue), backgroundColor:top10.map((_,i)=>`hsl(${240+i*20},65%,60%)`), borderRadius:6, borderSkipped:false }] },
+    options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa', callbacks:{ label: ctx=>' $'+ctx.raw.toLocaleString('en',{minimumFractionDigits:2}) } } }, scales:{ x:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{display:false}, ticks:{color:'#8b8baa',font:{size:11}} } } }
+  });
+
+  // Order volume bar chart
+  const ovCtx = document.getElementById('orderVolumeChart').getContext('2d');
+  new Chart(ovCtx, {
+    type:'bar',
+    data:{ labels:top10.map(r=>r.name.slice(0,12)), datasets:[{ data:top10.map(r=>r.total_orders), backgroundColor:'rgba(99,102,241,0.6)', borderColor:'#6366f1', borderWidth:1, borderRadius:6, borderSkipped:false }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa' } }, scales:{ x:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} } } }
+  });
+
+  // Model doughnut
+  const modelMap = {};
+  breakdown.forEach(r=>{ modelMap[r.model]=(modelMap[r.model]||0)+r.count; });
+  makeDoughnut('modelPieChart',
+    Object.keys(modelMap).map(k=>({shared_schema:'Shared Schema',schema_per_tenant:'Schema/Tenant',db_per_tenant:'DB/Tenant'}[k]||k)),
+    Object.values(modelMap),
+    ['#6366f1','#a855f7','#f97316'],
+    'modelPieLegend'
+  );
+
+  // Tier doughnut
+  const tierMap = {};
+  breakdown.forEach(r=>{ tierMap[r.tier]=(tierMap[r.tier]||0)+r.count; });
+  makeDoughnut('tierPieChart',
+    Object.keys(tierMap).map(k=>k.charAt(0).toUpperCase()+k.slice(1)),
+    Object.values(tierMap),
+    ['#64748b','#3b82f6','#f59e0b'],
+    'tierPieLegend'
+  );
+
+  // Audit doughnut
+  const opMap = {INSERT:0,UPDATE:0,DELETE:0};
+  auditOps.forEach(r=>{ opMap[r.operation]=(opMap[r.operation]||0)+r.count; });
+  makeDoughnut('auditPieChart',
+    Object.keys(opMap),
+    Object.values(opMap),
+    ['#22c55e','#f59e0b','#ef4444'],
+    'auditPieLegend'
+  );
+
+  // Audit table breakdown stacked bar
+  const tableMap = {};
+  auditOps.forEach(r=>{ if(!tableMap[r.operation]) tableMap[r.operation]={}; tableMap[r.operation][r.table_name||'unknown']=(tableMap[r.operation][r.table_name||'unknown']||0)+r.count; });
+  // We flatten by table
+  const tableAgg = {};
+  auditOps.forEach(r=>{ const t=r.table_name||'unknown'; if(!tableAgg[t]) tableAgg[t]={INSERT:0,UPDATE:0,DELETE:0}; tableAgg[t][r.operation]=(tableAgg[t][r.operation]||0)+r.count; });
+  const tables = Object.keys(tableAgg);
+  const atCtx  = document.getElementById('auditTableChart').getContext('2d');
+  new Chart(atCtx, {
+    type:'bar',
+    data:{
+      labels: tables,
+      datasets:[
+        { label:'INSERT', data:tables.map(t=>tableAgg[t].INSERT||0), backgroundColor:'rgba(34,197,94,0.7)', borderRadius:4, stack:'s' },
+        { label:'UPDATE', data:tables.map(t=>tableAgg[t].UPDATE||0), backgroundColor:'rgba(245,158,11,0.7)', borderRadius:4, stack:'s' },
+        { label:'DELETE', data:tables.map(t=>tableAgg[t].DELETE||0), backgroundColor:'rgba(239,68,68,0.7)',  borderRadius:4, stack:'s' },
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ labels:{ color:'#8b8baa', font:{size:11}, boxWidth:10 } }, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa' } }, scales:{ x:{ grid:{display:false}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}}, stacked:true }, x:{ stacked:true } } }
+  });
+
+  // Leaderboard (enrich with model/tier from tenants list)
+  const tenantList = await API.get('/tenants');
+  const tenantLookup = {};
+  (tenantList?.tenants||[]).forEach(t=>{ tenantLookup[t.slug]=t; });
+  leaderboardRaw = revenue.map(r=>({ ...r, tenant_id:(tenantLookup[r.slug]||{}).tenant_id, model:(tenantLookup[r.slug]||{}).model, tier:(tenantLookup[r.slug]||{}).tier }));
+  renderLeaderboard();
+}
+
+loadPageData();
+</script>
+{% endblock %}

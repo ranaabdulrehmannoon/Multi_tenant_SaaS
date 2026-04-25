@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Settings — MultiTenant SaaS{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_subtitle %}— System configuration{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header mb-4"><span class="card-title">Connection Settings</span></div>
+    <div class="card-body">
+      <div class="form-group"><label class="form-label">PostgreSQL Host</label><input class="form-input" value="localhost" readonly></div>
+      <div class="form-group"><label class="form-label">PostgreSQL Port</label><input class="form-input" value="5432" readonly></div>
+      <div class="form-group"><label class="form-label">Database</label><input class="form-input" value="multitenant_saas" readonly></div>
+      <div class="form-group"><label class="form-label">Redis Host</label><input class="form-input" value="localhost" readonly></div>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">Configuration is managed via <code style="background:var(--border);padding:1px 6px;border-radius:3px;">.env</code> file.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header mb-4"><span class="card-title">System Info</span></div>
+    <div class="card-body">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-secondary);font-size:13px;">Project</span>
+          <span style="font-weight:600;font-size:13px;">Multi-Tenant SaaS DB</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-secondary);font-size:13px;">Course</span>
+          <span style="font-weight:600;font-size:13px;">CS 236 — ADBMS</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-secondary);font-size:13px;">Instructor</span>
+          <span style="font-weight:600;font-size:13px;">Dr. Ayesha Hakim</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-secondary);font-size:13px;">Stack</span>
+          <span style="font-weight:600;font-size:13px;">PG 15 · Redis 7 · Flask 3</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:var(--text-secondary);font-size:13px;">Tenancy Models</span>
+          <span style="font-weight:600;font-size:13px;">A · B · C (all three)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

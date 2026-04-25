@@ -1,0 +1,518 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — MultiTenant SaaS{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+
+{% block content %}
+
+<!-- ── KPI Cards ───────────────────────────────────────────── -->
+<div class="stat-grid" id="statGrid">
+  <div class="stat-card" style="--card-accent:var(--accent);--icon-bg:var(--accent-soft);--icon-color:var(--accent);">
+    <div class="stat-icon">🏢</div>
+    <div>
+      <div class="stat-label">Total Tenants</div>
+      <div class="stat-value" id="stat-total">—</div>
+      <div class="stat-delta up" id="stat-active-sub">— active</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--success);--icon-bg:var(--success-soft);--icon-color:var(--success);">
+    <div class="stat-icon">👥</div>
+    <div>
+      <div class="stat-label">Total Users</div>
+      <div class="stat-value" id="stat-users">—</div>
+      <div class="stat-delta neutral">across all tenants</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--warning);--icon-bg:var(--warning-soft);--icon-color:var(--warning);">
+    <div class="stat-icon">📦</div>
+    <div>
+      <div class="stat-label">Total Orders</div>
+      <div class="stat-value" id="stat-orders">—</div>
+      <div class="stat-delta neutral">Model A shared schema</div>
+    </div>
+  </div>
+  <div class="stat-card" style="--card-accent:var(--purple);--icon-bg:var(--purple-soft);--icon-color:var(--purple);">
+    <div class="stat-icon">📝</div>
+    <div>
+      <div class="stat-label">Audit Events (24h)</div>
+      <div class="stat-value" id="stat-audit">—</div>
+      <div class="stat-delta neutral">INSERT / UPDATE / DELETE</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 1: Model distribution + Tier distribution ─────── -->
+<div class="grid-3-1 mb-6">
+  <div class="card">
+    <div class="card-header mb-4">
+      <span class="card-title">Tenant Distribution by Model</span>
+      <span class="badge badge-neutral" style="font-size:11px;">Live</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:230px;">
+        <canvas id="modelChart"></canvas>
+      </div>
+      <div id="modelLegend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header mb-4">
+      <span class="card-title">By Tier</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:230px;">
+        <canvas id="tierChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 2: Revenue bar + Activity table ──────────────────── -->
+<div class="grid-3-1 mb-6">
+  <div class="card">
+    <div class="card-header mb-4">
+      <span class="card-title">Top Tenants by Revenue</span>
+      <span class="text-sm text-muted">Shared schema (Model A)</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:240px;">
+        <canvas id="revenueChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header mb-4">
+      <span class="card-title">Model Breakdown</span>
+    </div>
+    <div class="card-body" id="modelBreakdown" style="display:flex;flex-direction:column;gap:10px;">
+      <div class="skeleton" style="height:40px;"></div>
+      <div class="skeleton" style="height:40px;"></div>
+      <div class="skeleton" style="height:40px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 3: Audit op breakdown + Recent tenants ───────────── -->
+<div class="grid-2 mb-6">
+
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Audit Operations (Last 24h)</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-wrap" style="height:200px;">
+        <canvas id="auditChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" style="margin-bottom:16px;">
+      <span class="card-title">Recent Tenants</span>
+      <a href="/ui/tenants" class="btn btn-ghost btn-sm">View all →</a>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Model</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="recentTenantsBody">
+            <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted);">
+              <span class="spinner"></span>
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 4: Recent audit log ───────────────────────────────── -->
+<div class="card">
+  <div class="card-header" style="margin-bottom:0;">
+    <span class="card-title">Recent Audit Events</span>
+    <a href="/ui/audit" class="btn btn-ghost btn-sm">Full log →</a>
+  </div>
+  <div class="card-body" style="padding-top:16px;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Tenant</th>
+            <th>Table</th>
+            <th>Operation</th>
+            <th>Row ID</th>
+            <th>By</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody">
+          <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted);">
+            <span class="spinner"></span>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+requireAuth();
+
+const COLORS = {
+  shared:   '#6366f1',
+  schema:   '#a855f7',
+  db:       '#f97316',
+  free:     '#64748b',
+  pro:      '#3b82f6',
+  enterprise:'#f59e0b',
+  INSERT:   '#22c55e',
+  UPDATE:   '#f59e0b',
+  DELETE:   '#ef4444',
+};
+
+let modelChartInst, tierChartInst, revenueChartInst, auditChartInst;
+
+function makeChart(id, type, labels, data, colors, opts={}) {
+  const ctx = document.getElementById(id).getContext('2d');
+  return new Chart(ctx, {
+    type,
+    data: { labels, datasets:[{ data, backgroundColor: colors, borderColor: colors.map(c=>c+'88'), borderWidth: type==='bar'?0:2, borderRadius: type==='bar'?6:0, hoverOffset:6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{ display:false }, tooltip:{
+        backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1,
+        titleColor:'#e8e8f4', bodyColor:'#8b8baa', padding:10,
+        callbacks: opts.tooltipCb || {}
+      }},
+      scales: type==='bar' ? {
+        x:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} },
+        y:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} }
+      } : {},
+      ...opts
+    }
+  });
+}
+
+async function loadPageData() {
+  const role     = localStorage.getItem('mt_role') || '';
+  const tenantId = localStorage.getItem('mt_tenant_id') || '';
+
+  if (role === 'superadmin') {
+    await loadSuperadminDashboard();
+  } else {
+    await loadTenantDashboard(tenantId);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// SUPERADMIN DASHBOARD — global cross-tenant view
+// ═══════════════════════════════════════════════
+async function loadSuperadminDashboard() {
+  const data = await API.get('/admin/metrics');
+  if (!data) return;
+
+  const breakdown    = data.tenant_breakdown || [];
+  const totalTenants = breakdown.reduce((s,r)=>s+r.count,0);
+  const activeTenants= breakdown.filter(r=>r.status==='active').reduce((s,r)=>s+r.count,0);
+  document.getElementById('stat-total').textContent      = totalTenants;
+  document.getElementById('stat-active-sub').textContent = activeTenants + ' active';
+
+  const totalOrders = (data.top_tenants_by_revenue||[]).reduce((s,r)=>s+r.total_orders,0);
+  document.getElementById('stat-orders').textContent = totalOrders.toLocaleString();
+
+  const auditOps = (data.audit_ops_last_24h||[]).reduce((s,r)=>s+r.count,0);
+  document.getElementById('stat-audit').textContent = auditOps.toLocaleString();
+
+  const tenantList = await API.get('/tenants');
+  if (tenantList) document.getElementById('stat-users').textContent = tenantList.count || '—';
+
+  // Model distribution doughnut
+  const modelMap = {};
+  breakdown.forEach(r => { modelMap[r.model] = (modelMap[r.model]||0) + r.count; });
+  const modelLabels = Object.keys(modelMap);
+  const modelData   = modelLabels.map(k=>modelMap[k]);
+  const modelColors = modelLabels.map(k => k==='shared_schema'?COLORS.shared:k==='schema_per_tenant'?COLORS.schema:COLORS.db);
+  if (modelChartInst) modelChartInst.destroy();
+  modelChartInst = makeChart('modelChart','doughnut',
+    modelLabels.map(l=>({shared_schema:'Shared Schema',schema_per_tenant:'Schema/Tenant',db_per_tenant:'DB/Tenant'}[l]||l)),
+    modelData, modelColors, { cutout:'65%' });
+  document.getElementById('modelLegend').innerHTML = modelLabels.map((l,i)=>
+    `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
+      <div style="width:10px;height:10px;border-radius:50%;background:${modelColors[i]};flex-shrink:0;"></div>
+      <span>${({shared_schema:'Shared Schema',schema_per_tenant:'Schema/Tenant',db_per_tenant:'DB/Tenant'}[l]||l)}</span>
+      <strong style="color:var(--text-primary);">${modelData[i]}</strong>
+    </div>`).join('');
+
+  // Tier doughnut
+  const tierMap = {};
+  breakdown.forEach(r => { tierMap[r.tier]=(tierMap[r.tier]||0)+r.count; });
+  const tierLabels = Object.keys(tierMap);
+  if (tierChartInst) tierChartInst.destroy();
+  tierChartInst = makeChart('tierChart','doughnut',
+    tierLabels.map(l=>l.charAt(0).toUpperCase()+l.slice(1)),
+    tierLabels.map(k=>tierMap[k]),
+    tierLabels.map(k=>COLORS[k]||'#64748b'), { cutout:'60%' });
+
+  // Revenue bar
+  const rev = (data.top_tenants_by_revenue||[]).slice(0,8);
+  if (revenueChartInst) revenueChartInst.destroy();
+  revenueChartInst = makeChart('revenueChart','bar',
+    rev.map(r=>r.name.slice(0,14)), rev.map(r=>r.total_revenue),
+    rev.map((_,i)=>`hsl(${240+i*18},70%,60%)`),
+    { tooltipCb:{ label: ctx=>' $'+ctx.raw.toLocaleString('en',{minimumFractionDigits:2}) }});
+
+  // Model breakdown
+  const mGroups = {};
+  breakdown.filter(r=>r.status==='active').forEach(r=>{ mGroups[r.model]=(mGroups[r.model]||0)+r.count; });
+  const mTotal = Object.values(mGroups).reduce((s,v)=>s+v,0)||1;
+  const mInfo  = {
+    shared_schema:    { label:'Model A — Shared Schema',   color:'var(--accent)', icon:'🗄' },
+    schema_per_tenant:{ label:'Model B — Schema/Tenant',   color:'var(--purple)', icon:'📁' },
+    db_per_tenant:    { label:'Model C — Database/Tenant', color:'var(--orange)', icon:'🔒' },
+  };
+  document.getElementById('modelBreakdown').innerHTML = Object.entries(mGroups).map(([k,v])=>{
+    const {label,color,icon}=mInfo[k]||{label:k,color:'var(--accent)',icon:'●'};
+    const pct=Math.round(v/mTotal*100);
+    return `<div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+        <span style="font-size:12.5px;color:var(--text-secondary);">${icon} ${label}</span>
+        <span style="font-size:12.5px;font-weight:700;color:var(--text-primary);">${v}
+          <span style="color:var(--text-muted);font-weight:400;">(${pct}%)</span></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div>
+    </div>`;
+  }).join('')||'<div class="text-muted text-sm">No active tenants</div>';
+
+  // Audit chart
+  const auditByOp={INSERT:0,UPDATE:0,DELETE:0};
+  (data.audit_ops_last_24h||[]).forEach(r=>{auditByOp[r.operation]=(auditByOp[r.operation]||0)+r.count;});
+  if (auditChartInst) auditChartInst.destroy();
+  auditChartInst = makeChart('auditChart','bar',
+    Object.keys(auditByOp), Object.values(auditByOp),
+    [COLORS.INSERT, COLORS.UPDATE, COLORS.DELETE]);
+
+  // Recent tenants table
+  const list = (await API.get('/tenants?status=active'))||{tenants:[]};
+  document.getElementById('recentTenantsBody').innerHTML = (list.tenants||[]).slice(0,6).map(t=>`
+    <tr style="cursor:pointer;" onclick="window.location='/ui/tenants/${t.tenant_id}'">
+      <td><div style="font-weight:600;">${t.name}</div><div class="td-muted">${t.slug}</div></td>
+      <td>${modelBadge(t.model)}</td><td>${statusBadge(t.status)}</td>
+      <td class="td-muted">${fmtDate(t.created_at)}</td>
+    </tr>`).join('')
+    ||`<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">No tenants yet</td></tr>`;
+
+  // Recent audit logs
+  const auditData = await API.get('/admin/audit-logs?limit=8');
+  const logs = (auditData||{}).logs||[];
+  document.getElementById('auditBody').innerHTML = logs.length
+    ? logs.map(l=>`
+        <tr>
+          <td class="td-muted">${fmtDateTime(l.created_at)}</td>
+          <td>${truncateId(l.tenant_id)}</td>
+          <td><span style="font-family:var(--font-mono);font-size:12px;">${l.table_name}</span></td>
+          <td>${opBadge(l.operation)}</td>
+          <td class="td-mono">${l.row_id?l.row_id.slice(0,10)+'…':'—'}</td>
+          <td class="td-muted">${l.db_user||'—'}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">No audit entries</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════
+// TENANT DASHBOARD — shows only this tenant's data
+// ═══════════════════════════════════════════════
+async function loadTenantDashboard(tenantId) {
+  if (!tenantId) {
+    document.getElementById('stat-total').textContent = '—';
+    return;
+  }
+
+  // Fetch tenant info + own data in parallel
+  const [tenant, ordersRes, productsRes, invoicesRes] = await Promise.all([
+    API.get(`/tenants/${tenantId}`),
+    API.get(`/tenants/${tenantId}/data?table=orders&limit=500`),
+    API.get(`/tenants/${tenantId}/data?table=products&limit=500`),
+    API.get(`/tenants/${tenantId}/data?table=invoices&limit=500`),
+  ]);
+
+  if (!tenant) return;
+
+  const orders   = (ordersRes||{}).data   || [];
+  const products = (productsRes||{}).data || [];
+  const invoices = (invoicesRes||{}).data || [];
+
+  // ── KPI cards — relabel for tenant context ───────────────
+  // Card 1: Tenant identity
+  document.querySelector('[data-stat="total"] .stat-label')
+    && (document.getElementById('stat-label-total').textContent = 'My Tenant');
+  document.getElementById('stat-total').textContent      = tenant.name || '—';
+  document.getElementById('stat-active-sub').innerHTML = `${tierBadge(tenant.tier)} ${statusBadge(tenant.status)}`;
+
+  // Card 2: Products
+  document.getElementById('stat-users').textContent = products.length;
+
+  // Card 3: Orders
+  document.getElementById('stat-orders').textContent = orders.length;
+
+  // Card 4: Invoices
+  document.getElementById('stat-audit').textContent = invoices.length;
+
+  // Update card labels to be tenant-appropriate
+  document.querySelector('#statGrid .stat-card:nth-child(1) .stat-label').textContent = 'My Tenant';
+  document.querySelector('#statGrid .stat-card:nth-child(2) .stat-label').textContent = 'My Products';
+  document.querySelector('#statGrid .stat-card:nth-child(2) .stat-delta').textContent = 'in catalogue';
+  document.querySelector('#statGrid .stat-card:nth-child(3) .stat-label').textContent = 'My Orders';
+  document.querySelector('#statGrid .stat-card:nth-child(3) .stat-delta').textContent = 'total orders placed';
+  document.querySelector('#statGrid .stat-card:nth-child(4) .stat-label').textContent = 'My Invoices';
+  document.querySelector('#statGrid .stat-card:nth-child(4) .stat-delta').textContent = 'issued / paid / overdue';
+
+  // ── Model distribution → Order status breakdown ──────────
+  const statusCount = {};
+  orders.forEach(o=>{ statusCount[o.status]=(statusCount[o.status]||0)+1; });
+  const statusColors = {
+    pending:'#f59e0b', confirmed:'#6366f1', shipped:'#3b82f6',
+    delivered:'#22c55e', cancelled:'#ef4444', refunded:'#8b5cf6'
+  };
+  const sLabels = Object.keys(statusCount);
+  if (modelChartInst) modelChartInst.destroy();
+  if (sLabels.length) {
+    modelChartInst = makeChart('modelChart','doughnut',
+      sLabels.map(l=>l.charAt(0).toUpperCase()+l.slice(1)),
+      sLabels.map(k=>statusCount[k]),
+      sLabels.map(k=>statusColors[k]||'#64748b'), { cutout:'65%' });
+    document.getElementById('modelLegend').innerHTML = sLabels.map(l=>
+      `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
+        <div style="width:10px;height:10px;border-radius:50%;background:${statusColors[l]||'#64748b'};flex-shrink:0;"></div>
+        <span>${l.charAt(0).toUpperCase()+l.slice(1)}</span>
+        <strong style="color:var(--text-primary);">${statusCount[l]}</strong>
+      </div>`).join('');
+  } else {
+    document.getElementById('modelChart').closest('.card').querySelector('.card-title').textContent='Order Status';
+    document.getElementById('modelLegend').innerHTML='<span style="color:var(--text-muted);font-size:13px;">No orders yet</span>';
+  }
+  document.querySelector('.grid-3-1 .card:first-child .card-title').textContent = 'Order Status Breakdown';
+
+  // ── Tier chart → top products by price ──────────────────
+  const topProds = [...products].sort((a,b)=>(b.price||0)-(a.price||0)).slice(0,6);
+  if (tierChartInst) tierChartInst.destroy();
+  if (topProds.length) {
+    tierChartInst = makeChart('tierChart','bar',
+      topProds.map(p=>(p.name||'').slice(0,12)),
+      topProds.map(p=>parseFloat(p.price)||0),
+      topProds.map((_,i)=>`hsl(${200+i*25},70%,55%)`),
+      { tooltipCb:{ label: ctx=>' $'+ctx.raw.toFixed(2) }});
+  }
+  document.querySelector('.grid-3-1 .card:last-child .card-title').textContent = 'Top Products by Price';
+
+  // ── Revenue chart → recent orders timeline ───────────────
+  const recentOrders = [...orders]
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+    .slice(0,10).reverse();
+  if (revenueChartInst) revenueChartInst.destroy();
+  if (recentOrders.length) {
+    revenueChartInst = makeChart('revenueChart','bar',
+      recentOrders.map(o=>fmtDate(o.created_at)),
+      recentOrders.map(o=>parseFloat(o.total_amount)||0),
+      recentOrders.map((_,i)=>`hsl(${240+i*12},70%,60%)`),
+      { tooltipCb:{ label: ctx=>' $'+ctx.raw.toFixed(2) }});
+  }
+  document.querySelector('.grid-3-1:nth-child(3) .card:first-child .card-title').textContent = 'Recent Orders (Amount)';
+
+  // ── Model breakdown → tenant info panel ──────────────────
+  const mLabel = {shared_schema:'Model A — Shared Schema',schema_per_tenant:'Model B — Schema/Tenant',db_per_tenant:'Model C — DB/Tenant'};
+  document.getElementById('modelBreakdown').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:var(--text-secondary);">Isolation Model</span>
+        <strong>${modelBadge(tenant.model)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:var(--text-secondary);">Tier</span>
+        <strong>${tierBadge(tenant.tier)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:var(--text-secondary);">Status</span>
+        <strong>${statusBadge(tenant.status)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:var(--text-secondary);">Max Users</span>
+        <strong style="color:var(--text-primary);">${tenant.max_users}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:var(--text-secondary);">Max Storage</span>
+        <strong style="color:var(--text-primary);">${tenant.max_storage_gb} GB</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;">
+        <span style="color:var(--text-secondary);">Created</span>
+        <strong style="color:var(--text-primary);">${fmtDate(tenant.created_at)}</strong>
+      </div>
+      <div style="margin-top:6px;padding:10px;background:var(--bg-input);border-radius:8px;font-size:12px;color:var(--text-muted);">
+        Slug: <span style="font-family:var(--font-mono);color:var(--text-secondary);">${tenant.slug}</span>
+      </div>
+    </div>`;
+  document.querySelector('.grid-3-1:nth-child(3) .card:last-child .card-title').textContent = 'My Tenant Info';
+
+  // ── Audit chart → invoice status breakdown ───────────────
+  const invStatus = {};
+  invoices.forEach(i=>{ invStatus[i.status]=(invStatus[i.status]||0)+1; });
+  const invColors = {draft:'#64748b',issued:'#6366f1',paid:'#22c55e',overdue:'#ef4444',void:'#8b5cf6'};
+  const iLabels = Object.keys(invStatus);
+  if (auditChartInst) auditChartInst.destroy();
+  if (iLabels.length) {
+    auditChartInst = makeChart('auditChart','bar',
+      iLabels.map(l=>l.charAt(0).toUpperCase()+l.slice(1)),
+      iLabels.map(k=>invStatus[k]),
+      iLabels.map(k=>invColors[k]||'#64748b'));
+  }
+  document.querySelector('.grid-2 .card:first-child .card-title').textContent = 'Invoice Status Breakdown';
+
+  // ── Recent orders table (replaces Recent Tenants) ────────
+  document.querySelector('.grid-2 .card:last-child .card-title').textContent = 'Recent Orders';
+  const recentTbl = [...orders].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,6);
+  document.getElementById('recentTenantsBody').innerHTML = recentTbl.length
+    ? recentTbl.map(o=>`
+        <tr>
+          <td><div style="font-weight:600;font-family:var(--font-mono);font-size:12px;">${(o.order_id||'').slice(0,8)}…</div></td>
+          <td>${statusBadge(o.status)}</td>
+          <td><strong>$${parseFloat(o.total_amount||0).toFixed(2)}</strong></td>
+          <td class="td-muted">${fmtDate(o.created_at)}</td>
+        </tr>`).join('')
+    : `<tr><td colspan="4" class="text-muted" style="text-align:center;padding:20px;">No orders yet — add some via the API</td></tr>`;
+
+  // Fix table headers for orders context
+  document.querySelector('#recentTenantsBody').closest('table').querySelector('thead tr').innerHTML =
+    '<th>Order ID</th><th>Status</th><th>Amount</th><th>Date</th>';
+
+  // ── Recent audit section → recent products ───────────────
+  document.querySelector('.card:last-child .card-title').textContent = 'My Products';
+  document.querySelector('#auditBody').closest('table').querySelector('thead tr').innerHTML =
+    '<th>Name</th><th>SKU</th><th>Price</th><th>Active</th><th>Created</th><th></th>';
+  const recentProds = [...products].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,8);
+  document.getElementById('auditBody').innerHTML = recentProds.length
+    ? recentProds.map(p=>`
+        <tr>
+          <td><strong>${p.name||'—'}</strong></td>
+          <td><span style="font-family:var(--font-mono);font-size:12px;">${p.sku||'—'}</span></td>
+          <td><strong>$${parseFloat(p.price||0).toFixed(2)}</strong></td>
+          <td>${p.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-neutral">Inactive</span>'}</td>
+          <td class="td-muted">${fmtDate(p.created_at)}</td>
+          <td></td>
+        </tr>`).join('')
+    : `<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">No products yet — add some via the API</td></tr>`;
+}
+
+loadPageData();
+</script>
+{% endblock %}

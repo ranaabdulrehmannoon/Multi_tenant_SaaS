@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+{% block title %}Benchmark — MultiTenant SaaS{% endblock %}
+{% block page_title %}Benchmark{% endblock %}
+{% block page_subtitle %}— Performance test suite across all tenancy models{% endblock %}
+
+{% block content %}
+
+<!-- Config + Run -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:32px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:20px;">
+      <div>
+        <h2 style="font-size:20px;font-weight:800;margin-bottom:6px;">⚡ Performance Benchmark Suite</h2>
+        <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;max-width:520px;">
+          Runs live queries against all three tenancy models — Shared Schema (RLS), Schema Per Tenant, and DB Per Tenant — and measures real p50/p95/p99 latency and throughput.
+        </p>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <div>
+          <label style="font-size:12px;color:var(--text-muted);font-weight:600;display:block;margin-bottom:4px;">ITERATIONS</label>
+          <select id="iterSelect" class="form-input" style="width:100px;padding:8px 12px;">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="runBtn" onclick="runBenchmark()" style="padding:12px 28px;font-size:15px;margin-top:18px;">
+          <span id="runBtnText">▶ Run Benchmark</span>
+          <span id="runSpinner" style="display:none;">
+            <span class="spinner" style="width:14px;height:14px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;display:inline-block;"></span>
+            Running…
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Results (hidden until run) -->
+<div id="resultsSection" style="display:none;">
+
+  <!-- Model cards -->
+  <div class="grid-3" style="margin-bottom:20px;" id="modelCards"></div>
+
+  <!-- Charts row -->
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Latency Comparison (ms)</span></div>
+      <div class="card-body"><canvas id="latencyChart" height="220"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Throughput (queries/sec)</span></div>
+      <div class="card-body"><canvas id="throughputChart" height="220"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Cache + summary -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Redis Cache Performance</span></div>
+      <div class="card-body" id="cacheSection"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Summary</span></div>
+      <div class="card-body" id="summarySection"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Info cards (shown before run) -->
+<div id="infoSection">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Metrics Measured</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:18px;">📊</span><div><strong>p50 / p95 / p99 Latency</strong><div style="font-size:13px;color:var(--text-secondary);">Percentile response times per model</div></div></div>
+        <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:18px;">⚡</span><div><strong>Throughput (q/s)</strong><div style="font-size:13px;color:var(--text-secondary);">Queries per second capacity</div></div></div>
+        <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:18px;">🗄</span><div><strong>Cache Speedup Ratio</strong><div style="font-size:13px;color:var(--text-secondary);">Redis hit vs miss latency</div></div></div>
+        <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:18px;">🔒</span><div><strong>RLS Overhead</strong><div style="font-size:13px;color:var(--text-secondary);">Cost of row-level security enforcement</div></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Models Tested</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+        <div style="padding:12px;background:var(--bg-input);border-radius:var(--radius);border-left:3px solid var(--accent);">
+          <strong style="color:var(--accent);">Model A — Shared Schema</strong>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">All tenants in one schema. RLS enforced via <code>app.current_tenant</code></div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border-radius:var(--radius);border-left:3px solid var(--success);">
+          <strong style="color:var(--success);">Model B — Schema Per Tenant</strong>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Dedicated schema per tenant. Isolated via <code>search_path</code></div>
+        </div>
+        <div style="padding:12px;background:var(--bg-input);border-radius:var(--radius);border-left:3px solid var(--purple);">
+          <strong style="color:var(--purple);">Model C — Database Per Tenant</strong>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Full database isolation. Separate connection pool per tenant</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- TEST SUITE SECTION                                             -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div class="card" style="margin-top:32px;margin-bottom:20px;">
+  <div class="card-body" style="padding:28px 32px 20px;">
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:4px;">🧪 Automated Test Suite</h2>
+    <p style="color:var(--text-secondary);font-size:14px;margin-bottom:24px;">
+      Click any button to run that test suite live against the database and see pass / fail results here in the UI.
+    </p>
+
+    <!-- Three test buttons -->
+    <div class="grid-3" style="gap:16px;">
+
+      <!-- ACID -->
+      <div class="card" style="border:1px solid var(--border);">
+        <div class="card-body" style="padding:20px;">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">ACID Properties</div>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">
+            Atomicity, Isolation, Consistency, Durability — 9 tests proving PostgreSQL ACID guarantees.
+          </p>
+          <button class="btn btn-primary" style="width:100%;" id="acidBtn" onclick="runTests('acid')">
+            <span id="acidBtnText">▶ Run ACID Tests</span>
+            <span id="acidSpinner" style="display:none;">
+              <span class="spinner" style="width:12px;height:12px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;display:inline-block;"></span>
+              Running…
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- RLS -->
+      <div class="card" style="border:1px solid var(--border);">
+        <div class="card-body" style="padding:20px;">
+          <div style="font-size:12px;font-weight:700;color:var(--success);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">RLS Isolation</div>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">
+            Row-Level Security — 13 tests proving cross-tenant data leakage is impossible.
+          </p>
+          <button class="btn btn-primary" style="width:100%;background:var(--success);" id="rlsBtn" onclick="runTests('rls')">
+            <span id="rlsBtnText">▶ Run RLS Tests</span>
+            <span id="rlsSpinner" style="display:none;">
+              <span class="spinner" style="width:12px;height:12px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;display:inline-block;"></span>
+              Running…
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PROVISIONER -->
+      <div class="card" style="border:1px solid var(--border);">
+        <div class="card-body" style="padding:20px;">
+          <div style="font-size:12px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Provisioner</div>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5;">
+            Tenant provisioning — tests all 3 models, slug validation, tier rules, deactivation.
+          </p>
+          <button class="btn btn-primary" style="width:100%;background:var(--purple);" id="provBtn" onclick="runTests('provisioner')">
+            <span id="provBtnText">▶ Run Provisioner Tests</span>
+            <span id="provSpinner" style="display:none;">
+              <span class="spinner" style="width:12px;height:12px;border-color:rgba(255,255,255,0.3);border-top-color:#fff;display:inline-block;"></span>
+              Running…
+            </span>
+          </button>
+        </div>
+      </div>
+
+    </div><!-- end grid-3 -->
+  </div>
+</div>
+
+<!-- Test results area (hidden until a test runs) -->
+<div id="testResultsSection" style="display:none;margin-bottom:32px;">
+  <div class="card">
+    <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
+      <span class="card-title" id="testResultsTitle">Test Results</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="testResultsBadge"></span>
+        <span style="font-size:12px;color:var(--text-muted);" id="testResultsDuration"></span>
+        <!-- Toggle raw output -->
+        <button class="btn" style="padding:4px 10px;font-size:12px;background:var(--bg-input);color:var(--text-secondary);"
+                onclick="toggleRaw()">Show Raw Output</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0;">
+
+      <!-- Summary bar -->
+      <div id="testSummaryBar" style="display:flex;gap:0;border-bottom:1px solid var(--border);">
+        <div style="flex:1;text-align:center;padding:14px 0;border-right:1px solid var(--border);">
+          <div style="font-size:26px;font-weight:800;color:var(--success);" id="sumPassed">—</div>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;">Passed</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:14px 0;border-right:1px solid var(--border);">
+          <div style="font-size:26px;font-weight:800;color:var(--danger);" id="sumFailed">—</div>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;">Failed</div>
+        </div>
+        <div style="flex:1;text-align:center;padding:14px 0;">
+          <div style="font-size:26px;font-weight:800;color:var(--text-primary);" id="sumTotal">—</div>
+          <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;">Total</div>
+        </div>
+      </div>
+
+      <!-- Individual test rows -->
+      <div id="testRowsContainer" style="padding:16px 24px;display:flex;flex-direction:column;gap:8px;"></div>
+
+      <!-- Raw pytest output (hidden by default) -->
+      <div id="rawOutputPanel" style="display:none;padding:0 24px 20px;">
+        <pre id="rawOutputText" style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);padding:16px;font-size:12px;color:var(--text-secondary);overflow-x:auto;white-space:pre-wrap;max-height:400px;overflow-y:auto;"></pre>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let latencyChartInst, throughputChartInst;
+
+async function runBenchmark() {
+  const iterations = parseInt(document.getElementById('iterSelect').value);
+  document.getElementById('runBtnText').style.display = 'none';
+  document.getElementById('runSpinner').style.display = 'inline-flex';
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('infoSection').style.display = 'none';
+
+  const res = await API.post('/admin/benchmark/run', { iterations });
+
+  document.getElementById('runBtnText').style.display = 'inline';
+  document.getElementById('runSpinner').style.display = 'none';
+  document.getElementById('runBtn').disabled = false;
+
+  if (!res.ok) { toast(res.data.error || 'Benchmark failed', 'error'); document.getElementById('infoSection').style.display = 'block'; return; }
+
+  const d = res.data;
+  document.getElementById('resultsSection').style.display = 'block';
+  renderModelCards(d.results);
+  renderCharts(d.results);
+  renderCache(d.cache);
+  renderSummary(d.results, d.iterations);
+  toast('Benchmark complete!', 'success');
+}
+
+const MODEL_LABELS = { shared_schema: 'Model A — Shared Schema', schema_per_tenant: 'Model B — Schema/Tenant', db_per_tenant: 'Model C — DB/Tenant' };
+const MODEL_COLORS = { shared_schema: 'var(--accent)', schema_per_tenant: 'var(--success)', db_per_tenant: 'var(--purple)' };
+
+function renderModelCards(results) {
+  const c = document.getElementById('modelCards');
+  c.innerHTML = Object.entries(results).map(([model, r]) => `
+    <div class="card">
+      <div class="card-body">
+        <div style="font-size:12px;font-weight:700;color:${MODEL_COLORS[model]};text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;">${MODEL_LABELS[model]}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div style="text-align:center;padding:10px;background:var(--bg-input);border-radius:8px;">
+            <div style="font-size:18px;font-weight:800;color:var(--text-primary);">${r.p50}</div>
+            <div style="font-size:11px;color:var(--text-muted);">p50 ms</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--bg-input);border-radius:8px;">
+            <div style="font-size:18px;font-weight:800;color:var(--warning);">${r.p95}</div>
+            <div style="font-size:11px;color:var(--text-muted);">p95 ms</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:var(--bg-input);border-radius:8px;">
+            <div style="font-size:18px;font-weight:800;color:var(--danger);">${r.p99}</div>
+            <div style="font-size:11px;color:var(--text-muted);">p99 ms</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);">
+          <span>Avg: <strong style="color:var(--text-primary);">${r.avg}ms</strong></span>
+          <span>Throughput: <strong style="color:var(--text-primary);">${r.throughput} q/s</strong></span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCharts(results) {
+  const labels = Object.values(MODEL_LABELS);
+  const colors = ['rgba(99,102,241,0.8)', 'rgba(34,197,94,0.8)', 'rgba(168,85,247,0.8)'];
+
+  if (latencyChartInst) latencyChartInst.destroy();
+  latencyChartInst = new Chart(document.getElementById('latencyChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'p50', data: Object.values(results).map(r => r.p50), backgroundColor: colors.map(c => c.replace('0.8','0.6')) },
+        { label: 'p95', data: Object.values(results).map(r => r.p95), backgroundColor: colors.map(c => c.replace('0.8','0.8')) },
+        { label: 'p99', data: Object.values(results).map(r => r.p99), backgroundColor: colors },
+      ]
+    },
+    options: { responsive:true, plugins:{legend:{labels:{color:'#8b8baa'}}}, scales:{x:{ticks:{color:'#8b8baa'},grid:{color:'#1e1e30'}},y:{ticks:{color:'#8b8baa'},grid:{color:'#1e1e30'}}}}
+  });
+
+  if (throughputChartInst) throughputChartInst.destroy();
+  throughputChartInst = new Chart(document.getElementById('throughputChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Throughput (q/s)', data: Object.values(results).map(r => r.throughput), backgroundColor: colors }]
+    },
+    options: { responsive:true, plugins:{legend:{labels:{color:'#8b8baa'}}}, scales:{x:{ticks:{color:'#8b8baa'},grid:{color:'#1e1e30'}},y:{ticks:{color:'#8b8baa'},grid:{color:'#1e1e30'}}}}
+  });
+}
+
+function renderCache(cache) {
+  document.getElementById('cacheSection').innerHTML = cache.hit_ms ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="text-align:center;padding:14px;background:var(--bg-input);border-radius:8px;">
+        <div style="font-size:22px;font-weight:800;color:var(--success);">${cache.hit_ms}ms</div>
+        <div style="font-size:12px;color:var(--text-muted);">Cache HIT</div>
+      </div>
+      <div style="text-align:center;padding:14px;background:var(--bg-input);border-radius:8px;">
+        <div style="font-size:22px;font-weight:800;color:var(--warning);">${cache.miss_ms}ms</div>
+        <div style="font-size:12px;color:var(--text-muted);">Cache MISS</div>
+      </div>
+      <div style="text-align:center;padding:14px;background:var(--bg-input);border-radius:8px;">
+        <div style="font-size:22px;font-weight:800;color:var(--accent);">${cache.speedup}×</div>
+        <div style="font-size:12px;color:var(--text-muted);">Speedup</div>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--text-secondary);">Redis cache is <strong style="color:var(--success);">${cache.speedup}× faster</strong> than a cold database query. TTL: 60s.</p>
+  ` : `<p style="color:var(--text-muted);">Redis unavailable — cache benchmark skipped.</p>`;
+}
+
+function renderSummary(results, iterations) {
+  const fastest = Object.entries(results).sort((a,b) => a[1].p50 - b[1].p50)[0];
+  const highest = Object.entries(results).sort((a,b) => b[1].throughput - a[1].throughput)[0];
+  document.getElementById('summarySection').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="padding:12px;background:var(--success-soft);border:1px solid rgba(34,197,94,0.2);border-radius:8px;">
+        <div style="font-size:12px;color:var(--success);font-weight:600;">🏆 FASTEST MODEL (p50)</div>
+        <div style="font-size:15px;font-weight:700;margin-top:4px;">${MODEL_LABELS[fastest[0]]}</div>
+        <div style="font-size:13px;color:var(--text-secondary);">${fastest[1].p50}ms median latency</div>
+      </div>
+      <div style="padding:12px;background:var(--accent-soft);border:1px solid rgba(99,102,241,0.2);border-radius:8px;">
+        <div style="font-size:12px;color:var(--accent);font-weight:600;">⚡ HIGHEST THROUGHPUT</div>
+        <div style="font-size:15px;font-weight:700;margin-top:4px;">${MODEL_LABELS[highest[0]]}</div>
+        <div style="font-size:13px;color:var(--text-secondary);">${highest[1].throughput} queries/sec</div>
+      </div>
+      <div style="font-size:13px;color:var(--text-muted);padding-top:8px;">
+        Ran ${iterations} iterations per model · ${new Date().toLocaleTimeString()}
+      </div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEST SUITE JAVASCRIPT
+// ═══════════════════════════════════════════════════════════════
+
+const TEST_META = {
+  acid:        { label: 'ACID Properties',   color: 'var(--accent)' },
+  rls:         { label: 'RLS Isolation',     color: 'var(--success)' },
+  provisioner: { label: 'Provisioner Tests', color: 'var(--purple)' },
+};
+
+// Maps test_key → { btnId, textId, spinnerId }
+const TEST_BTN_IDS = {
+  acid:        { btn: 'acidBtn', text: 'acidBtnText', spinner: 'acidSpinner' },
+  rls:         { btn: 'rlsBtn',  text: 'rlsBtnText',  spinner: 'rlsSpinner'  },
+  provisioner: { btn: 'provBtn', text: 'provBtnText',  spinner: 'provSpinner' },
+};
+
+function _setTestBtnLoading(key, loading) {
+  const ids = TEST_BTN_IDS[key];
+  document.getElementById(ids.btn).disabled = loading;
+  document.getElementById(ids.text).style.display    = loading ? 'none'        : 'inline';
+  document.getElementById(ids.spinner).style.display = loading ? 'inline-flex' : 'none';
+}
+
+async function runTests(testKey) {
+  _setTestBtnLoading(testKey, true);
+  document.getElementById('testResultsSection').style.display = 'none';
+
+  const res = await API.post('/admin/tests/run', { test_file: testKey });
+
+  _setTestBtnLoading(testKey, false);
+
+  if (!res.ok) {
+    toast(res.data.error || 'Test run failed', 'error');
+    return;
+  }
+
+  renderTestResults(res.data, testKey);
+  const status = res.data.success ? 'success' : 'error';
+  const msg    = res.data.success
+    ? `All ${res.data.passed} tests passed!`
+    : `${res.data.failed} test(s) failed`;
+  toast(msg, status);
+}
+
+function renderTestResults(data, testKey) {
+  const meta = TEST_META[testKey];
+
+  // Title
+  document.getElementById('testResultsTitle').textContent =
+    `${meta.label} — Results`;
+
+  // Overall badge
+  document.getElementById('testResultsBadge').innerHTML = data.success
+    ? `<span class="badge badge-success" style="font-size:13px;">ALL PASSED</span>`
+    : `<span class="badge badge-danger"  style="font-size:13px;">${data.failed} FAILED</span>`;
+
+  // Duration
+  document.getElementById('testResultsDuration').textContent =
+    data.duration ? `completed in ${data.duration}s` : '';
+
+  // Summary bar numbers
+  document.getElementById('sumPassed').textContent = data.passed;
+  document.getElementById('sumFailed').textContent = data.failed;
+  document.getElementById('sumTotal').textContent  = data.total;
+
+  // Individual test rows
+  const container = document.getElementById('testRowsContainer');
+  if (data.tests.length === 0) {
+    // Show a helpful message and auto-open the raw output so user can see what went wrong
+    container.innerHTML = `
+      <div style="padding:14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;">
+        <div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:6px;">No test results could be parsed.</div>
+        <div style="font-size:13px;color:var(--text-secondary);">
+          Possible reasons:<br>
+          • pytest is not installed inside the container — run <code>pip install pytest</code><br>
+          • An import error prevented test collection<br>
+          • The test file path is wrong<br><br>
+          Click <strong>Show Raw Output</strong> above to see the exact error from pytest.
+        </div>
+      </div>`;
+    // Auto-open raw output so user sees the error immediately
+    document.getElementById('rawOutputPanel').style.display = 'block';
+    document.querySelector('[onclick="toggleRaw()"]').textContent = 'Hide Raw Output';
+  } else {
+    container.innerHTML = data.tests.map((t, i) => {
+      const isPassed = t.status === 'passed';
+      const icon     = isPassed ? '✅' : '❌';
+      const color    = isPassed ? 'var(--success)' : 'var(--danger)';
+      const bg       = isPassed ? 'var(--success-soft)' : 'rgba(239,68,68,0.06)';
+      const border   = isPassed ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.2)';
+
+      // Make test name readable: test_01_correct_context → Correct Context
+      const readableName = t.name
+        .replace(/^test_\d+_/, '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+
+      return `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;
+                    background:${bg};border:1px solid ${border};
+                    border-radius:8px;animation:fadeIn 0.2s ease ${i*0.05}s both;">
+          <span style="font-size:16px;">${icon}</span>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;color:var(--text-primary);">${readableName}</div>
+            <div style="font-size:11px;color:var(--text-muted);font-family:monospace;">${t.name}</div>
+          </div>
+          <span style="font-size:12px;font-weight:700;color:${color};
+                       text-transform:uppercase;letter-spacing:0.05em;">${t.status}</span>
+        </div>`;
+    }).join('');
+  }
+
+  // Raw output
+  document.getElementById('rawOutputText').textContent = data.raw || '(no output)';
+  document.getElementById('rawOutputPanel').style.display = 'none';
+
+  // Show section
+  document.getElementById('testResultsSection').style.display = 'block';
+  document.getElementById('testResultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleRaw() {
+  const panel = document.getElementById('rawOutputPanel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  event.target.textContent = isHidden ? 'Hide Raw Output' : 'Show Raw Output';
+}
+</script>
+{% endblock %}
