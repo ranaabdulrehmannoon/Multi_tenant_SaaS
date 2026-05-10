@@ -91,10 +91,19 @@ def get_connection(
     try:
         conn.autocommit = False
         with conn.cursor() as cur:
+            # CRITICAL: the pool connects as the PostgreSQL SUPERUSER
+            # (POSTGRES_USER from docker-compose.yml).  Superusers BYPASS RLS
+            # automatically, which would let every tenant see every other
+            # tenant's data.  Drop privilege to app_api (a normal role with
+            # explicit GRANTs but no BYPASSRLS) so the tenant_isolation
+            # policies actually fire.  SET LOCAL → reverts on commit/rollback,
+            # so the next checkout from the pool starts clean.
+            if db_name is None:
+                cur.execute("SET LOCAL ROLE app_api")
             if schema_name:
                 # Model B: set search_path so bare table names resolve to tenant schema
                 cur.execute(
-                    "SET search_path = %s, public",
+                    "SET LOCAL search_path = %s, public",
                     (schema_name,)
                 )
             if tenant_id:

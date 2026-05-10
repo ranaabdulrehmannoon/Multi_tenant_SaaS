@@ -190,13 +190,17 @@ function quickFilter(op) {
 
 async function loadLogs(page) {
   currentPage = page || 1;
+  const role   = localStorage.getItem('mt_role') || '';
+  const ownTenantId = localStorage.getItem('mt_tenant_id') || '';
   const tenant = document.getElementById('f-tenant').value.trim();
   const table  = document.getElementById('f-table').value;
   const op     = document.getElementById('f-op').value;
   const since  = document.getElementById('f-since').value;
 
-  let url = `/admin/audit-logs?limit=200`;
-  if (tenant) url += `&tenant_id=${encodeURIComponent(tenant)}`;
+  let url = role === 'superadmin'
+    ? `/admin/audit-logs?limit=200`
+    : `/tenants/${ownTenantId}/audit-logs?limit=200`;
+  if (role === 'superadmin' && tenant) url += `&tenant_id=${encodeURIComponent(tenant)}`;
   if (table)  url += `&table=${table}`;
   if (op)     url += `&operation=${op}`;
   if (since)  url += `&since=${encodeURIComponent(since)}`;
@@ -205,6 +209,9 @@ async function loadLogs(page) {
     `<tr><td colspan="9" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr>`;
 
   const data = await API.get(url);
+  if (data && data.error) {
+    toast(data.error, 'error');
+  }
   allLogs    = (data||{}).logs || [];
 
   // Stats
@@ -352,6 +359,16 @@ function exportCSV() {
 
 // Default: show last 24h
 document.getElementById('f-since').value = new Date(Date.now()-86400000).toISOString().slice(0,16);
+(function initAuditFilters() {
+  const role = localStorage.getItem('mt_role') || '';
+  const ownTenantId = localStorage.getItem('mt_tenant_id') || '';
+  if (role !== 'superadmin') {
+    const tenantInput = document.getElementById('f-tenant');
+    tenantInput.value = ownTenantId;
+    tenantInput.disabled = true;
+    tenantInput.placeholder = 'Current tenant only';
+  }
+})();
 loadLogs(1);
 </script>
 {% endblock %}

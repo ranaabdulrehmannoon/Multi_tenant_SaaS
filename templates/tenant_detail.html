@@ -33,13 +33,13 @@
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-shrink:0;" id="headerActions">
-        <button class="btn btn-ghost btn-sm" onclick="openModal('addUserModal')">
+        <button class="btn btn-ghost btn-sm user-admin-only-action" onclick="openModal('addUserModal')">
           + Add User
         </button>
-        <button class="btn btn-ghost btn-sm" onclick="openModal('insertDataModal')">
+        <button class="btn btn-ghost btn-sm tenant-only-action" onclick="openModal('insertDataModal')">
           + Insert Data
         </button>
-        <button class="btn btn-danger btn-sm" id="deactivateBtn">
+        <button class="btn btn-danger btn-sm superadmin-only-action" id="deactivateBtn">
           Deactivate
         </button>
       </div>
@@ -111,9 +111,9 @@
   <div class="card">
     <div class="card-body" style="padding:0;">
       <table><thead><tr>
-        <th>Order ID</th><th>Status</th><th>Amount</th><th>Currency</th><th>Created</th>
+        <th>Order ID</th><th>Status</th><th>Amount</th><th>Currency</th><th>Created</th><th class="tenant-only-action">Actions</th>
       </tr></thead>
-      <tbody id="ordersBody"><tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
+      <tbody id="ordersBody"><tr><td colspan="6" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -124,9 +124,9 @@
   <div class="card">
     <div class="card-body" style="padding:0;">
       <table><thead><tr>
-        <th>Name</th><th>SKU</th><th>Price</th><th>Status</th><th>Created</th>
+        <th>Name</th><th>SKU</th><th>Price</th><th>Status</th><th>Created</th><th class="tenant-only-action">Actions</th>
       </tr></thead>
-      <tbody id="productsBody"><tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
+      <tbody id="productsBody"><tr><td colspan="6" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -137,13 +137,13 @@
   <div class="card">
     <div class="card-header mb-4">
       <span class="card-title">Users</span>
-      <button class="btn btn-primary btn-sm" onclick="openModal('addUserModal')">+ Add User</button>
+      <button class="btn btn-primary btn-sm user-admin-only-action" onclick="openModal('addUserModal')">+ Add User</button>
     </div>
     <div class="card-body" style="padding-top:0;">
       <table><thead><tr>
-        <th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th>
+        <th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th class="user-admin-only-action">Actions</th>
       </tr></thead>
-      <tbody id="usersBody"><tr><td colspan="5" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
+        <tbody id="usersBody"><tr><td colspan="6" style="text-align:center;padding:40px;"><span class="spinner"></span></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -273,6 +273,117 @@
   </div>
 </div>
 
+<!-- ── EDIT USER MODAL ───────────────────────────────────────── -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <span class="modal-title">Edit User</span>
+      <button class="modal-close" onclick="closeModal('editUserModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="editUserError" class="login-error"></div>
+      <input type="hidden" id="edit-user-id">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="text" class="form-input" id="edit-user-email" disabled>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-select" id="edit-user-role">
+            <option value="tenant_user">Tenant User</option>
+            <option value="tenant_admin">Tenant Admin</option>
+            <option value="tenant_readonly">Readonly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="edit-user-active">
+            <option value="true">Active</option>
+            <option value="false">Disabled</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">New Password</label>
+        <input type="password" class="form-input" id="edit-user-password" placeholder="Leave blank to keep current">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editUserModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUserEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT PRODUCT MODAL ────────────────────────────────────── -->
+<div class="modal-overlay" id="editProductModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <span class="modal-title">Edit Product</span>
+      <button class="modal-close" onclick="closeModal('editProductModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="editProductError" class="login-error"></div>
+      <input type="hidden" id="edit-product-id">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="edit-product-name"></div>
+        <div class="form-group"><label class="form-label">SKU</label><input type="text" class="form-input" id="edit-product-sku"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Price</label><input type="number" class="form-input" id="edit-product-price" step="0.01"></div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="edit-product-active">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editProductModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProductEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT ORDER MODAL ──────────────────────────────────────── -->
+<div class="modal-overlay" id="editOrderModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <span class="modal-title">Edit Order</span>
+      <button class="modal-close" onclick="closeModal('editOrderModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="editOrderError" class="login-error"></div>
+      <input type="hidden" id="edit-order-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="edit-order-status">
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="refunded">Refunded</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Currency</label><input type="text" class="form-input" id="edit-order-currency" maxlength="3"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Total Amount</label><input type="number" class="form-input" id="edit-order-amount" step="0.01"></div>
+        <div class="form-group"><label class="form-label">Notes</label><input type="text" class="form-input" id="edit-order-notes" placeholder="Optional note"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editOrderModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveOrderEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -281,7 +392,7 @@ requireAuth();
 
 const TENANT_ID = window.location.pathname.split('/').pop();
 let tenantData = null;
-let ordersData = [], productsData = [];
+let ordersData = [], productsData = [], usersData = [];
 
 function switchTab(name, el) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -300,8 +411,28 @@ function toggleInsertFields() {
   document.getElementById('ins-order-fields').style.display   = t==='orders'   ? '' : 'none';
 }
 
+// ── Role-based action visibility ──────────────────────────────
+// Superadmin: read-only across tenants + can deactivate
+// Tenant admin (own tenant only): can add users / insert data
+function applyRoleVisibility() {
+  const role     = localStorage.getItem('mt_role');
+  const ownTenant = localStorage.getItem('mt_tenant_id') === TENANT_ID;
+  const canWrite = (role === 'tenant_admin' || role === 'tenant_user') && ownTenant;
+  const canManageUsers = role === 'tenant_admin' && ownTenant;
+  document.querySelectorAll('.tenant-only-action').forEach(el => {
+    el.style.display = canWrite ? '' : 'none';
+  });
+  document.querySelectorAll('.user-admin-only-action').forEach(el => {
+    el.style.display = canManageUsers ? '' : 'none';
+  });
+  document.querySelectorAll('.superadmin-only-action').forEach(el => {
+    el.style.display = (role === 'superadmin') ? '' : 'none';
+  });
+}
+
 // ── Load tenant info ─────────────────────────────────────────
 async function loadPageData() {
+  applyRoleVisibility();
   const t = await API.get(`/tenants/${TENANT_ID}`);
   if (!t) return;
   tenantData = t;
@@ -367,6 +498,8 @@ function filterOrders() {
 }
 
 function renderOrdersTable(rows) {
+  const canWrite = (localStorage.getItem('mt_role') === 'tenant_admin' || localStorage.getItem('mt_role') === 'tenant_user')
+    && localStorage.getItem('mt_tenant_id') === TENANT_ID;
   document.getElementById('ordersBody').innerHTML = rows.length
     ? rows.slice(0,50).map(r=>`
       <tr>
@@ -375,8 +508,10 @@ function renderOrdersTable(rows) {
         <td style="font-weight:600;">$${parseFloat(r.total_amount||0).toFixed(2)}</td>
         <td class="td-muted">${r.currency||'USD'}</td>
         <td class="td-muted">${fmtDateTime(r.created_at)}</td>
+        <td class="tenant-only-action">${canWrite ? actionButtons('order', r.order_id) : ''}</td>
       </tr>`).join('')
-    : `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No orders</div></div></td></tr>`;
+    : `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">No orders</div></div></td></tr>`;
+  applyRoleVisibility();
 }
 
 function buildOrderCharts(rows) {
@@ -417,6 +552,9 @@ function buildOrderCharts(rows) {
 async function loadProducts() {
   const data = await API.get(`/tenants/${TENANT_ID}/data?table=products&limit=100`);
   const rows  = (data||{}).data || [];
+  productsData = rows;
+  const canWrite = (localStorage.getItem('mt_role') === 'tenant_admin' || localStorage.getItem('mt_role') === 'tenant_user')
+    && localStorage.getItem('mt_tenant_id') === TENANT_ID;
   document.getElementById('productsBody').innerHTML = rows.length
     ? rows.map(r=>`
       <tr>
@@ -425,25 +563,50 @@ async function loadProducts() {
         <td style="font-weight:600;color:var(--success);">$${parseFloat(r.price||0).toFixed(2)}</td>
         <td>${r.is_active ? badge('Active','success') : badge('Inactive','neutral')}</td>
         <td class="td-muted">${fmtDate(r.created_at)}</td>
+        <td class="tenant-only-action">${canWrite ? actionButtons('product', r.product_id) : ''}</td>
       </tr>`).join('')
-    : `<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🛍</div><div class="empty-title">No products</div></div></td></tr>`;
+    : `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">🛍</div><div class="empty-title">No products</div></div></td></tr>`;
+  applyRoleVisibility();
 }
 
 // ── Users ─────────────────────────────────────────────────────
 async function loadUsers() {
-  // We don't have a direct "list users" endpoint; using a workaround via admin
-  document.getElementById('usersBody').innerHTML =
-    `<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px;">
-      User listing requires a dedicated GET /tenants/&lt;id&gt;/users endpoint.<br>
-      Shown in the provisioner tests — users are in public.tenant_users.
-    </td></tr>`;
+  const tbody = document.getElementById('usersBody');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:30px;"><span class="spinner"></span></td></tr>`;
+  const data  = await API.get(`/tenants/${TENANT_ID}/users`);
+  const users = (data || {}).users || [];
+  usersData = users;
+
+  if (!users.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">No users yet</div><div class="empty-desc">Click <strong>+ Add User</strong> to create one.</div></div></td></tr>`;
+    return;
+  }
+
+  const roleColors = {
+    superadmin:      'accent',
+    tenant_admin:    'success',
+    tenant_user:     'info',
+    tenant_readonly: 'neutral',
+  };
+
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>${u.email}</td>
+      <td>${badge(u.role.replace('_',' '), roleColors[u.role] || 'neutral')}</td>
+      <td>${u.is_active ? badge('active','success') : badge('disabled','neutral')}</td>
+      <td class="td-muted">${u.last_login_at ? fmtDateTime(u.last_login_at) : '—'}</td>
+      <td class="td-muted">${fmtDate(u.created_at)}</td>
+      <td class="user-admin-only-action">${userActionButtons(u)}</td>
+    </tr>
+  `).join('');
+  applyRoleVisibility();
 }
 
 // ── Audit ─────────────────────────────────────────────────────
 async function loadAudit() {
   const op    = document.getElementById('auditOpFilter').value;
   const table = document.getElementById('auditTableFilter').value;
-  let url = `/admin/audit-logs?tenant_id=${TENANT_ID}&limit=50`;
+  let url = `/tenants/${TENANT_ID}/audit-logs?limit=50`;
   if (op)    url += `&operation=${op}`;
   if (table) url += `&table=${table}`;
 
@@ -475,8 +638,16 @@ async function addUser() {
   const role     = document.getElementById('u-role').value;
   if (!email||!password) { document.getElementById('addUserError').textContent='Email and password required.'; document.getElementById('addUserError').classList.add('show'); return; }
   const res = await API.post(`/tenants/${TENANT_ID}/users`, { email, password, role });
-  if (res.ok) { closeModal('addUserModal'); toast('User created','success'); }
-  else { document.getElementById('addUserError').textContent=res.data.error||'Failed'; document.getElementById('addUserError').classList.add('show'); }
+  if (res.ok) {
+    closeModal('addUserModal');
+    toast('User created','success');
+    document.getElementById('u-email').value = '';
+    document.getElementById('u-password').value = '';
+    loadUsers();   // refresh the table immediately
+  } else {
+    document.getElementById('addUserError').textContent = res.data.error || 'Failed';
+    document.getElementById('addUserError').classList.add('show');
+  }
 }
 
 // ── Insert Data ───────────────────────────────────────────────
@@ -489,8 +660,159 @@ async function insertData() {
     data = { total_amount: parseFloat(document.getElementById('ins-o-amount').value), currency: document.getElementById('ins-o-currency').value };
   }
   const res = await API.post(`/tenants/${TENANT_ID}/data`, { table, data });
-  if (res.ok) { closeModal('insertDataModal'); toast(`${table.slice(0,-1)} inserted`,'success'); if(table==='orders') loadOrders(); else loadProducts(); }
+  if (res.ok) {
+    closeModal('insertDataModal');
+    toast(`${table.slice(0,-1)} inserted`,'success');
+    if(table==='orders') loadOrders(); else loadProducts();
+    loadAudit();
+  }
   else { document.getElementById('insertDataError').textContent=res.data.error||'Failed'; document.getElementById('insertDataError').classList.add('show'); }
+}
+
+function actionButtons(kind, rowId) {
+  return `
+    <div class="action-strip">
+      <button class="btn btn-ghost btn-sm" onclick="openEditModal('${kind}','${rowId}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRecord('${kind}','${rowId}')">Delete</button>
+    </div>`;
+}
+
+function userActionButtons(user) {
+  const currentUserId = (() => {
+    try { return JSON.parse(atob(API.token().split('.')[1])).sub; }
+    catch { return null; }
+  })();
+  const deleteDisabled = user.user_id === currentUserId ? 'disabled' : '';
+  return `
+    <div class="action-strip">
+      <button class="btn btn-ghost btn-sm" onclick="openEditModal('user','${user.user_id}')">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteRecord('user','${user.user_id}')" ${deleteDisabled}>Delete</button>
+    </div>`;
+}
+
+function openEditModal(kind, rowId) {
+  if (kind === 'user') {
+    const user = usersData.find(u => u.user_id === rowId);
+    if (!user) return;
+    document.getElementById('edit-user-id').value = user.user_id;
+    document.getElementById('edit-user-email').value = user.email;
+    document.getElementById('edit-user-role').value = user.role;
+    document.getElementById('edit-user-active').value = String(!!user.is_active);
+    document.getElementById('edit-user-password').value = '';
+    document.getElementById('editUserError').classList.remove('show');
+    openModal('editUserModal');
+    return;
+  }
+
+  if (kind === 'product') {
+    const product = productsData.find(p => p.product_id === rowId);
+    if (!product) return;
+    document.getElementById('edit-product-id').value = product.product_id;
+    document.getElementById('edit-product-name').value = product.name || '';
+    document.getElementById('edit-product-sku').value = product.sku || '';
+    document.getElementById('edit-product-price').value = parseFloat(product.price || 0).toFixed(2);
+    document.getElementById('edit-product-active').value = String(!!product.is_active);
+    document.getElementById('editProductError').classList.remove('show');
+    openModal('editProductModal');
+    return;
+  }
+
+  const order = ordersData.find(o => o.order_id === rowId);
+  if (!order) return;
+  document.getElementById('edit-order-id').value = order.order_id;
+  document.getElementById('edit-order-status').value = order.status || 'pending';
+  document.getElementById('edit-order-currency').value = order.currency || 'USD';
+  document.getElementById('edit-order-amount').value = parseFloat(order.total_amount || 0).toFixed(2);
+  document.getElementById('edit-order-notes').value = order.notes || '';
+  document.getElementById('editOrderError').classList.remove('show');
+  openModal('editOrderModal');
+}
+
+async function saveUserEdit() {
+  const userId = document.getElementById('edit-user-id').value;
+  const body = {
+    role: document.getElementById('edit-user-role').value,
+    is_active: document.getElementById('edit-user-active').value === 'true',
+    password: document.getElementById('edit-user-password').value
+  };
+  const res = await API.put(`/tenants/${TENANT_ID}/users/${userId}`, body);
+  if (res.ok) {
+    closeModal('editUserModal');
+    toast('User updated', 'success');
+    loadUsers();
+  } else {
+    document.getElementById('editUserError').textContent = res.data.error || 'Failed';
+    document.getElementById('editUserError').classList.add('show');
+  }
+}
+
+async function saveProductEdit() {
+  const productId = document.getElementById('edit-product-id').value;
+  const body = {
+    data: {
+      name: document.getElementById('edit-product-name').value.trim(),
+      sku: document.getElementById('edit-product-sku').value.trim(),
+      price: parseFloat(document.getElementById('edit-product-price').value || 0),
+      is_active: document.getElementById('edit-product-active').value === 'true'
+    }
+  };
+  const res = await API.put(`/tenants/${TENANT_ID}/data/products/${productId}`, body);
+  if (res.ok) {
+    closeModal('editProductModal');
+    toast('Product updated', 'success');
+    loadProducts();
+    loadAudit();
+  } else {
+    document.getElementById('editProductError').textContent = res.data.error || 'Failed';
+    document.getElementById('editProductError').classList.add('show');
+  }
+}
+
+async function saveOrderEdit() {
+  const orderId = document.getElementById('edit-order-id').value;
+  const body = {
+    data: {
+      status: document.getElementById('edit-order-status').value,
+      currency: document.getElementById('edit-order-currency').value.trim().toUpperCase(),
+      total_amount: parseFloat(document.getElementById('edit-order-amount').value || 0),
+      notes: document.getElementById('edit-order-notes').value.trim()
+    }
+  };
+  const res = await API.put(`/tenants/${TENANT_ID}/data/orders/${orderId}`, body);
+  if (res.ok) {
+    closeModal('editOrderModal');
+    toast('Order updated', 'success');
+    loadOrders();
+    loadAudit();
+  } else {
+    document.getElementById('editOrderError').textContent = res.data.error || 'Failed';
+    document.getElementById('editOrderError').classList.add('show');
+  }
+}
+
+async function deleteRecord(kind, rowId) {
+  const nouns = { user: 'user', product: 'product', order: 'order' };
+  if (!confirm(`Delete this ${nouns[kind]}? This is useful for demonstrating audit DELETE events.`)) return;
+
+  const url = kind === 'user'
+    ? `/tenants/${TENANT_ID}/users/${rowId}`
+    : `/tenants/${TENANT_ID}/data/${kind}s/${rowId}`;
+  const res = await API.del(url);
+  if (!res.ok) {
+    toast(res.data.error || 'Delete failed', 'error');
+    return;
+  }
+
+  toast(`${nouns[kind]} deleted`, 'warning');
+  if (kind === 'user') {
+    loadUsers();
+  } else if (kind === 'product') {
+    loadProducts();
+    loadAudit();
+  } else {
+    loadOrders();
+    loadAudit();
+  }
 }
 
 loadPageData();

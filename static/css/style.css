@@ -391,6 +391,12 @@ tbody td { padding: 11px 12px; font-size: 13px; color: var(--text-primary); vert
 .btn-icon { padding: 7px; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+.action-strip {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 /* ── Forms ─────────────────────────────────────────────────── */
 .form-group { margin-bottom: 14px; }
 .form-label {

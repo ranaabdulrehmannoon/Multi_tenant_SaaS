@@ -153,6 +153,19 @@ requireAuth();
 
 let metricsData = null;
 let revenueData = [];
+let revenueChartInst = null;
+let orderChartInst = null;
+let modelChartInst = null;
+let tierChartInst = null;
+let auditChartInst = null;
+let auditTableChartInst = null;
+
+function upsertChart(instanceRefName, canvasId, config) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const current = window[instanceRefName];
+  if (current) current.destroy();
+  window[instanceRefName] = new Chart(ctx, config);
+}
 
 function makeDoughnut(id, labels, data, colors, legendId) {
   const ctx = document.getElementById(id).getContext('2d');
@@ -213,6 +226,16 @@ function renderLeaderboard() {
 }
 
 async function loadPageData() {
+  const role = localStorage.getItem('mt_role') || '';
+  const tenantId = localStorage.getItem('mt_tenant_id') || '';
+  if (role === 'superadmin') {
+    await loadSuperadminMetrics();
+  } else {
+    await loadTenantMetrics(tenantId);
+  }
+}
+
+async function loadSuperadminMetrics() {
   const data = await API.get('/admin/metrics');
   if (!data) return;
   metricsData = data;
@@ -234,16 +257,14 @@ async function loadPageData() {
 
   // Revenue bar chart
   const top10 = revenue.slice(0,10);
-  const rCtx  = document.getElementById('revenueBarChart').getContext('2d');
-  new Chart(rCtx, {
+  upsertChart('revenueChartInst', 'revenueBarChart', {
     type:'bar',
     data:{ labels:top10.map(r=>r.name.slice(0,12)), datasets:[{ data:top10.map(r=>r.total_revenue), backgroundColor:top10.map((_,i)=>`hsl(${240+i*20},65%,60%)`), borderRadius:6, borderSkipped:false }] },
     options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa', callbacks:{ label: ctx=>' $'+ctx.raw.toLocaleString('en',{minimumFractionDigits:2}) } } }, scales:{ x:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{display:false}, ticks:{color:'#8b8baa',font:{size:11}} } } }
   });
 
   // Order volume bar chart
-  const ovCtx = document.getElementById('orderVolumeChart').getContext('2d');
-  new Chart(ovCtx, {
+  upsertChart('orderChartInst', 'orderVolumeChart', {
     type:'bar',
     data:{ labels:top10.map(r=>r.name.slice(0,12)), datasets:[{ data:top10.map(r=>r.total_orders), backgroundColor:'rgba(99,102,241,0.6)', borderColor:'#6366f1', borderWidth:1, borderRadius:6, borderSkipped:false }] },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa' } }, scales:{ x:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} } } }
@@ -286,8 +307,7 @@ async function loadPageData() {
   const tableAgg = {};
   auditOps.forEach(r=>{ const t=r.table_name||'unknown'; if(!tableAgg[t]) tableAgg[t]={INSERT:0,UPDATE:0,DELETE:0}; tableAgg[t][r.operation]=(tableAgg[t][r.operation]||0)+r.count; });
   const tables = Object.keys(tableAgg);
-  const atCtx  = document.getElementById('auditTableChart').getContext('2d');
-  new Chart(atCtx, {
+  upsertChart('auditTableChartInst', 'auditTableChart', {
     type:'bar',
     data:{
       labels: tables,
@@ -306,6 +326,122 @@ async function loadPageData() {
   (tenantList?.tenants||[]).forEach(t=>{ tenantLookup[t.slug]=t; });
   leaderboardRaw = revenue.map(r=>({ ...r, tenant_id:(tenantLookup[r.slug]||{}).tenant_id, model:(tenantLookup[r.slug]||{}).model, tier:(tenantLookup[r.slug]||{}).tier }));
   renderLeaderboard();
+}
+
+async function loadTenantMetrics(tenantId) {
+  if (!tenantId) return;
+
+  const [tenant, ordersRes, productsRes, invoicesRes, auditRes] = await Promise.all([
+    API.get(`/tenants/${tenantId}`),
+    API.get(`/tenants/${tenantId}/data?table=orders&limit=500`),
+    API.get(`/tenants/${tenantId}/data?table=products&limit=500`),
+    API.get(`/tenants/${tenantId}/data?table=invoices&limit=500`),
+    API.get(`/tenants/${tenantId}/audit-logs?limit=500`)
+  ]);
+  if (!tenant) return;
+
+  const orders = (ordersRes || {}).data || [];
+  const products = (productsRes || {}).data || [];
+  const invoices = (invoicesRes || {}).data || [];
+  const auditOps = (auditRes || {}).logs || [];
+
+  const totalRevenue = orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+  document.getElementById('m-revenue').textContent = '$' + totalRevenue.toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  document.getElementById('m-orders').textContent = orders.length.toLocaleString();
+  document.getElementById('m-audit').textContent = auditOps.length.toLocaleString();
+  document.getElementById('m-tenants').textContent = '1';
+
+  document.querySelector('#m-revenue').previousElementSibling.textContent = 'My Revenue';
+  document.querySelector('#m-orders').previousElementSibling.textContent = 'My Orders';
+  document.querySelector('#m-audit').previousElementSibling.textContent = 'My Audit Ops (24h)';
+  document.querySelector('#m-tenants').previousElementSibling.textContent = 'Tenant Scope';
+  document.querySelector('#m-revenue').nextElementSibling.textContent = tenant.name;
+  document.querySelector('#m-orders').nextElementSibling.textContent = 'Current tenant only';
+  document.querySelector('#m-audit').nextElementSibling.textContent = 'Products / orders changes';
+  document.querySelector('#m-tenants').nextElementSibling.textContent = tenant.model.replaceAll('_', ' ');
+
+  document.querySelector('.grid-2 .card:first-child .card-title').textContent = 'Revenue by Recent Orders';
+  document.querySelector('.grid-2 .card:last-child .card-title').textContent = 'Order Amounts';
+  document.querySelector('.grid-3 .card:nth-child(1) .card-title').textContent = 'Order Status Distribution';
+  document.querySelector('.grid-3 .card:nth-child(2) .card-title').textContent = 'Invoice Status Distribution';
+  document.querySelector('.grid-3 .card:nth-child(3) .card-title').textContent = 'Audit Operation Breakdown';
+  document.querySelector('.card.mb-6 .card-title').textContent = 'Recent Orders';
+  document.querySelector('.card:last-child .card-title').textContent = 'Audit Operations by Table';
+  document.querySelector('.badge.badge-accent').textContent = tenant.tier ? tenant.tier.toUpperCase() : 'TENANT';
+
+  const recentOrders = [...orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
+  upsertChart('revenueChartInst', 'revenueBarChart', {
+    type:'bar',
+    data:{ labels:recentOrders.map(o => (o.order_id || '').slice(0, 8)), datasets:[{ data:recentOrders.map(o => parseFloat(o.total_amount || 0)), backgroundColor:recentOrders.map((_,i)=>`hsl(${210+i*10},65%,60%)`), borderRadius:6, borderSkipped:false }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa', callbacks:{ label: ctx=>' $'+ctx.raw.toLocaleString('en',{minimumFractionDigits:2}) } } }, scales:{ x:{ grid:{display:false}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} } } }
+  });
+
+  upsertChart('orderChartInst', 'orderVolumeChart', {
+    type:'line',
+    data:{ labels:recentOrders.map(o => fmtDate(o.created_at)), datasets:[{ data:recentOrders.map(o => parseFloat(o.total_amount || 0)), borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,0.12)', borderWidth:2, pointBackgroundColor:'#6366f1', pointRadius:4, fill:true, tension:0.35 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa' } }, scales:{ x:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} } } }
+  });
+
+  const statusMap = {};
+  orders.forEach(o => { statusMap[o.status] = (statusMap[o.status] || 0) + 1; });
+  makeDoughnut('modelPieChart',
+    Object.keys(statusMap).map(k => k.charAt(0).toUpperCase() + k.slice(1)),
+    Object.values(statusMap),
+    ['#f59e0b','#6366f1','#3b82f6','#22c55e','#ef4444','#8b5cf6'],
+    'modelPieLegend'
+  );
+
+  const invoiceMap = {};
+  invoices.forEach(i => { invoiceMap[i.status] = (invoiceMap[i.status] || 0) + 1; });
+  makeDoughnut('tierPieChart',
+    Object.keys(invoiceMap).map(k => k.charAt(0).toUpperCase() + k.slice(1)),
+    Object.values(invoiceMap),
+    ['#64748b','#6366f1','#22c55e','#ef4444','#8b5cf6'],
+    'tierPieLegend'
+  );
+
+  const auditMap = {INSERT:0, UPDATE:0, DELETE:0};
+  auditOps.forEach(a => { auditMap[a.operation] = (auditMap[a.operation] || 0) + 1; });
+  makeDoughnut('auditPieChart',
+    Object.keys(auditMap),
+    Object.values(auditMap),
+    ['#22c55e','#f59e0b','#ef4444'],
+    'auditPieLegend'
+  );
+
+  leaderboardRaw = [...orders]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 12)
+    .map((o, idx) => ({
+      tenant_id: tenantId,
+      name: `Order ${(o.order_id || '').slice(0, 8)}`,
+      slug: tenant.slug,
+      model: tenant.model,
+      tier: tenant.tier,
+      total_orders: idx + 1,
+      total_revenue: parseFloat(o.total_amount || 0)
+    }));
+  renderLeaderboard();
+
+  const tableAgg = {};
+  auditOps.forEach(r => {
+    const t = r.table_name || 'unknown';
+    if (!tableAgg[t]) tableAgg[t] = {INSERT:0, UPDATE:0, DELETE:0};
+    tableAgg[t][r.operation] = (tableAgg[t][r.operation] || 0) + 1;
+  });
+  const tables = Object.keys(tableAgg);
+  upsertChart('auditTableChartInst', 'auditTableChart', {
+    type:'bar',
+    data:{
+      labels: tables,
+      datasets:[
+        { label:'INSERT', data:tables.map(t=>tableAgg[t].INSERT||0), backgroundColor:'rgba(34,197,94,0.7)', borderRadius:4, stack:'s' },
+        { label:'UPDATE', data:tables.map(t=>tableAgg[t].UPDATE||0), backgroundColor:'rgba(245,158,11,0.7)', borderRadius:4, stack:'s' },
+        { label:'DELETE', data:tables.map(t=>tableAgg[t].DELETE||0), backgroundColor:'rgba(239,68,68,0.7)', borderRadius:4, stack:'s' }
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ labels:{ color:'#8b8baa', font:{size:11}, boxWidth:10 } }, tooltip:{ backgroundColor:'#111120', borderColor:'#1e1e30', borderWidth:1, titleColor:'#e8e8f4', bodyColor:'#8b8baa' } }, scales:{ x:{ stacked:true, grid:{display:false}, ticks:{color:'#8b8baa',font:{size:11}} }, y:{ stacked:true, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8b8baa',font:{size:11}} } } }
+  });
 }
 
 loadPageData();

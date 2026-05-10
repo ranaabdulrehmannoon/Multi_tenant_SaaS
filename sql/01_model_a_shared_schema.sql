@@ -209,18 +209,11 @@ CREATE POLICY tenant_isolation_invoices ON public.invoices
         tenant_id = current_setting('app.current_tenant', TRUE)::UUID
     );
 
--- Superadmin bypass: app_superadmin sees all rows (for analytics/monitoring)
-CREATE POLICY superadmin_bypass_products ON public.products
-    AS PERMISSIVE FOR ALL TO app_superadmin USING (TRUE) WITH CHECK (TRUE);
-
-CREATE POLICY superadmin_bypass_orders ON public.orders
-    AS PERMISSIVE FOR ALL TO app_superadmin USING (TRUE) WITH CHECK (TRUE);
-
-CREATE POLICY superadmin_bypass_order_items ON public.order_items
-    AS PERMISSIVE FOR ALL TO app_superadmin USING (TRUE) WITH CHECK (TRUE);
-
-CREATE POLICY superadmin_bypass_invoices ON public.invoices
-    AS PERMISSIVE FOR ALL TO app_superadmin USING (TRUE) WITH CHECK (TRUE);
+-- NOTE: There is intentionally NO superadmin bypass policy on these tables.
+-- The application (api/routes) sets app.current_tenant for every query,
+-- so even superadmin queries are scoped to the tenant being viewed.
+-- A bypass policy here would be OR-combined with tenant_isolation_* and
+-- collapse to USING (TRUE), defeating tenant isolation entirely.
 
 -- ---------------------------------------------------------------------------
 -- GRANT table permissions to the API role

@@ -20,31 +20,20 @@ DECLARE
     v_old       JSONB := NULL;
     v_new       JSONB := NULL;
 BEGIN
-    -- Resolve tenant_id: try column on row, then fall back to session variable
+    -- Resolve tenant_id: try column on the row first (Model A has it),
+    -- then fall back to the session variable (Model B has no tenant_id column).
     IF TG_OP = 'DELETE' THEN
-        BEGIN
-            v_tenant_id := (row_to_json(OLD) ->> 'tenant_id')::UUID;
-        EXCEPTION WHEN others THEN
-            v_tenant_id := current_setting('app.current_tenant', TRUE)::UUID;
-        END;
-        v_row_id := (row_to_json(OLD) ->> 'id');
-        IF v_row_id IS NULL THEN
-            -- Try common PK column patterns
-            v_row_id := COALESCE(
-                row_to_json(OLD) ->> (TG_TABLE_NAME || '_id'),
-                row_to_json(OLD) ->> 'order_id',
-                row_to_json(OLD) ->> 'product_id',
-                row_to_json(OLD) ->> 'item_id',
-                row_to_json(OLD) ->> 'invoice_id'
-            );
-        END IF;
+        v_tenant_id := (row_to_json(OLD) ->> 'tenant_id')::UUID;
+        v_row_id := COALESCE(
+            row_to_json(OLD) ->> (TG_TABLE_NAME || '_id'),
+            row_to_json(OLD) ->> 'order_id',
+            row_to_json(OLD) ->> 'product_id',
+            row_to_json(OLD) ->> 'item_id',
+            row_to_json(OLD) ->> 'invoice_id'
+        );
         v_old := row_to_json(OLD)::JSONB;
     ELSIF TG_OP = 'INSERT' THEN
-        BEGIN
-            v_tenant_id := (row_to_json(NEW) ->> 'tenant_id')::UUID;
-        EXCEPTION WHEN others THEN
-            v_tenant_id := current_setting('app.current_tenant', TRUE)::UUID;
-        END;
+        v_tenant_id := (row_to_json(NEW) ->> 'tenant_id')::UUID;
         v_row_id := COALESCE(
             row_to_json(NEW) ->> (TG_TABLE_NAME || '_id'),
             row_to_json(NEW) ->> 'order_id',
@@ -52,18 +41,23 @@ BEGIN
         );
         v_new := row_to_json(NEW)::JSONB;
     ELSE -- UPDATE
-        BEGIN
-            v_tenant_id := (row_to_json(NEW) ->> 'tenant_id')::UUID;
-        EXCEPTION WHEN others THEN
-            v_tenant_id := current_setting('app.current_tenant', TRUE)::UUID;
-        END;
+        v_tenant_id := (row_to_json(NEW) ->> 'tenant_id')::UUID;
         v_row_id := COALESCE(
             row_to_json(NEW) ->> (TG_TABLE_NAME || '_id'),
             row_to_json(NEW) ->> 'order_id'
         );
-        -- Only record changed columns in new_value to keep audit log lean
         v_old := row_to_json(OLD)::JSONB;
         v_new := row_to_json(NEW)::JSONB;
+    END IF;
+
+    -- If the row had no tenant_id column (Model B), use the session variable.
+    -- NULL coercion does NOT throw, so this can't be inside an EXCEPTION block.
+    IF v_tenant_id IS NULL THEN
+        BEGIN
+            v_tenant_id := current_setting('app.current_tenant', TRUE)::UUID;
+        EXCEPTION WHEN others THEN
+            v_tenant_id := NULL;
+        END;
     END IF;
 
     -- Resolve calling user from session variable (set by Flask JWT middleware)

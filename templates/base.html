@@ -41,7 +41,7 @@
       <span class="nav-badge" id="nb-tenants">—</span>
     </a>
 
-    <a href="#" id="myTenantLink" class="nav-item" id="myTenantItem" style="display:none;">
+    <a href="#" id="myTenantLink" class="nav-item" style="display:none;">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         <polyline points="9 22 9 12 15 12 15 22"/>
@@ -184,6 +184,10 @@ const API = {
     const r = await fetch(url, { method:'POST', headers: API.headers(), body: JSON.stringify(body) });
     return { ok: r.ok, status: r.status, data: await r.json() };
   },
+  async put(url, body) {
+    const r = await fetch(url, { method:'PUT', headers: API.headers(), body: JSON.stringify(body) });
+    return { ok: r.ok, status: r.status, data: await r.json() };
+  },
   async del(url) {
     const r = await fetch(url, { method:'DELETE', headers: API.headers() });
     return { ok: r.ok, data: await r.json() };
@@ -319,11 +323,12 @@ document.addEventListener('keydown', e => {
   // Role-based UI: hide superadmin-only nav items for tenant_admin
   if (role !== 'superadmin') {
     document.querySelectorAll('.superadmin-only').forEach(el => el.style.display = 'none');
-    // Show my-tenant link with actual tenant id
+    // Show My Tenant link wired to this user's tenant
     const myTenantLink = document.getElementById('myTenantLink');
-    if (myTenantLink && tenant) myTenantLink.href = `/ui/tenants/${tenant}`;
-    const myTenantItem = document.getElementById('myTenantItem');
-    if (myTenantItem) myTenantItem.style.display = 'flex';
+    if (myTenantLink && tenant) {
+      myTenantLink.href = `/ui/tenants/${tenant}`;
+      myTenantLink.style.display = 'flex';
+    }
   }
 })();
 

@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS {schema_name}.orders (
                         CHECK (status IN ('pending','confirmed','shipped','delivered','cancelled','refunded')),
     total_amount    NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
     currency        CHAR(3)      NOT NULL DEFAULT 'USD',
-    shipping_addr   JSONB        NOT NULL DEFAULT '{{}}',
+    shipping_addr   JSONB        NOT NULL DEFAULT '{}',
     notes           TEXT,
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
