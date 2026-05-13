@@ -1,6 +1,6 @@
 # 🏢 Multi-Tenant SaaS Platform
 
-Multi_tenant_SaaS is a platform that automates tenant provisioning and management for multi-tenant SaaS applications.
+Multi_tenant_SaaS is a platform that automates tenant provisioning and management for multi-tenant SaaS applications. It is a production-grade e-commerce backend built with Python Flask and PostgreSQL 15, implementing three distinct data isolation strategies — shared schema with Row-Level Security, schema-per-tenant, and database-per-tenant — within a single unified architecture. It features JWT authentication, bcrypt password hashing, Redis caching, a full audit log with JSONB before/after diffs, and 25+ REST endpoints covering tenants, products, orders, and invoices. The entire stack is containerized with Docker Compose, making it an enterprise-ready foundation capable of supporting thousands of tenants across multiple isolation tiers.
 
 ## 🎯 Project Overview
 
@@ -738,26 +738,6 @@ CREATE TABLE public.audit_log (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these guidelines:
-
-1. **Fork the repository**
-2. **Create a feature branch**
-   ```bash
-   git checkout -b feature/your-feature
-   ```
-3. **Make your changes**
-4. **Write/update tests**
-5. **Commit with clear messages**
-   ```bash
-   git commit -m "Add feature: description"
-   ```
-6. **Push to your branch**
-7. **Create a Pull Request**
 
 ---
 
