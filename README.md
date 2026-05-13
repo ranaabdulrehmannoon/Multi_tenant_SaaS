@@ -1,6 +1,6 @@
 # 🏢 Multi-Tenant SaaS Platform
 
-A **production-grade multi-tenant e-commerce platform** demonstrating advanced database concepts with three different isolation strategies: Row-Level Security (RLS), Schema-Per-Tenant, and Database-Per-Tenant models.
+Multi_tenant_SaaS is a platform that automates tenant provisioning and management for multi-tenant SaaS applications.
 
 ## 🎯 Project Overview
 
