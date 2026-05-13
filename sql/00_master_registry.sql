@@ -1,9 +1,4 @@
--- =============================================================================
--- 00_master_registry.sql
--- Master tenant registry, RBAC roles, and system-level infrastructure.
--- Runs once during initial database setup.
--- PostgreSQL 15+
--- =============================================================================
+
 
 -- ---------------------------------------------------------------------------
 -- Extensions
@@ -32,7 +27,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_tenant_readonly') THEN
         CREATE ROLE app_tenant_readonly NOLOGIN;
     END IF;
-    -- Application connection role (the role Flask connects as)
+
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_api') THEN
         CREATE ROLE app_api LOGIN PASSWORD 'app_api_password';
     END IF;
@@ -57,9 +52,9 @@ CREATE TABLE IF NOT EXISTS public.tenants (
     model           VARCHAR(30)  NOT NULL CHECK (model IN ('shared_schema', 'schema_per_tenant', 'db_per_tenant')),
     status          VARCHAR(20)  NOT NULL DEFAULT 'active'
                         CHECK (status IN ('active', 'suspended', 'deactivated')),
-    -- Model B: the schema name created for this tenant
+    
     schema_name     VARCHAR(100),
-    -- Model C: the database name created for this tenant
+    
     db_name         VARCHAR(100),
     -- Resource limits per tier
     max_users       INTEGER      NOT NULL DEFAULT 10,

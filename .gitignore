@@ -13,24 +13,63 @@ build/
 venv/
 .venv/
 env/
+ENV/
 
 # Environment variables — NEVER commit secrets
 .env
-
-# Pytest
-.pytest_cache/
-.coverage
-htmlcov/
+.env.local
+.env.*.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+.AppleDouble
+.LSOverride
 
-# Logs
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Logging
 *.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Temp files
+*.tmp
+*.temp
+*~
+.~*
+
+# Report generation (local use only)
+*.docx
+*.doc
+*.pdf
+GENERATION_SUMMARY.txt
+FINAL_STATUS_REPORT.txt
+INDEX.md
+QUICK_REFERENCE.txt
+SETUP_COMPLETE.txt
+00_READ_ME_FIRST.txt
+
+# Local scripts (for development)
+generate_word_report.js
+generate_docx.py
+quick_generate.cmd
+run_generate_report.bat
+setup_and_run.sh
